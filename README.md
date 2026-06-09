@@ -10,7 +10,7 @@
 - 기사 기준일: 발송일 당일 또는 전날 발행 기사만 포함
 - 주제: PG/결제/정산, 커머스/플랫폼, PM/PO/서비스기획, AI/업무자동화, 경제/스타트업/테크
 - 선정 기준: 업무 적용성 60%, 시장 흐름 40%
-- 결과물: 브라우저에서 바로 여는 HTML 카드뉴스
+- 결과물: 이메일 본문에서 바로 읽는 HTML 카드뉴스
 
 ## 폴더 구조
 
@@ -24,7 +24,8 @@
 
 ## GitHub Actions 자동 발송
 
-GitHub Actions가 평일 오전 8시(KST)에 실행되어 HTML 카드뉴스를 이메일로 발송합니다.
+GitHub Actions가 평일 오전 8시(KST)에 실행되어 HTML 카드뉴스를 이메일 본문으로 발송합니다.
+첨부 HTML 파일은 보내지 않고, 백업용 HTML은 GitHub Actions artifact로만 보관합니다.
 
 GitHub의 `Settings > Secrets and variables > Actions > Repository secrets`에 아래 값을 등록하세요.
 

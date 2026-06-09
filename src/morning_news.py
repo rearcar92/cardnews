@@ -11,7 +11,6 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
-from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import parsedate_to_datetime
@@ -315,33 +314,40 @@ def format_date(value: datetime | None) -> str:
 
 def render_card(item: NewsItem, index: int, core_count: int) -> str:
     tier = "핵심" if index <= core_count else "참고"
+    escaped_url = html.escape(item.url, quote=True)
     summary_items = "\n".join(
-        f"<li>{html.escape(sentence)}</li>" for sentence in split_summary(item.summary)
+        f'<li style="margin:0 0 8px 0;color:#303642;">{html.escape(sentence)}</li>'
+        for sentence in split_summary(item.summary)
     )
     reasons = " · ".join(dict.fromkeys(item.reasons))
 
     return f"""
-        <article class="news-card">
-          <div class="card-topline">
-            <span class="tier">{tier} {index}</span>
-            <span class="topic">{html.escape(item.topic.label)}</span>
+        <article style="background:#ffffff;border:1px solid #d8dde6;border-radius:8px;padding:22px;margin:0 0 16px 0;">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;font-size:13px;font-weight:700;">
+            <span style="color:#176b87;">{tier} {index}</span>
+            <span style="color:#8a5a00;text-align:right;">{html.escape(item.topic.label)}</span>
           </div>
-          <h2>{html.escape(item.title)}</h2>
-          <ul class="summary-list">
+          <h2 style="font-size:21px;line-height:1.35;margin:0 0 14px 0;letter-spacing:0;">
+            <a href="{escaped_url}" target="_blank" rel="noreferrer" style="color:#16181d;text-decoration:none;">{html.escape(item.title)}</a>
+          </h2>
+          <ul style="margin:0 0 18px 0;padding-left:20px;">
             {summary_items}
           </ul>
-          <section>
-            <h3>왜 중요한가</h3>
-            <p>{html.escape(item.topic.why_it_matters)}</p>
+          <section style="border-top:1px solid #e4e7ec;padding-top:14px;margin-top:4px;">
+            <h3 style="font-size:14px;margin:0 0 6px 0;color:#344054;letter-spacing:0;">왜 중요한가</h3>
+            <p style="margin:0;color:#3f4652;">{html.escape(item.topic.why_it_matters)}</p>
           </section>
-          <section>
-            <h3>내게 적용할 점</h3>
-            <p>{html.escape(item.topic.action_hint)}</p>
+          <section style="border-top:1px solid #e4e7ec;padding-top:14px;margin-top:14px;">
+            <h3 style="font-size:14px;margin:0 0 6px 0;color:#344054;letter-spacing:0;">내게 적용할 점</h3>
+            <p style="margin:0;color:#3f4652;">{html.escape(item.topic.action_hint)}</p>
           </section>
-          <footer>
-            <span>{html.escape(item.source)} · {format_date(item.published)}</span>
-            <span>{html.escape(reasons)}</span>
-            <a href="{html.escape(item.url)}" target="_blank" rel="noreferrer">원문 보기</a>
+          <footer style="border-top:1px solid #e4e7ec;margin-top:16px;padding-top:14px;color:#667085;font-size:13px;">
+            <div style="margin-bottom:6px;">{html.escape(item.source)} · {format_date(item.published)}</div>
+            <div style="margin-bottom:12px;">선정 이유: {html.escape(reasons)}</div>
+            <a href="{escaped_url}" target="_blank" rel="noreferrer" style="display:inline-block;background:#176b87;color:#ffffff;text-decoration:none;font-weight:700;border-radius:6px;padding:9px 13px;">원문 보기</a>
+            <div style="margin-top:8px;word-break:break-all;">
+              <a href="{escaped_url}" target="_blank" rel="noreferrer" style="color:#176b87;text-decoration:underline;">{escaped_url}</a>
+            </div>
           </footer>
         </article>
     """
@@ -528,7 +534,7 @@ def render_html(items: list[NewsItem], config: dict[str, Any], generated_at: dat
     <header>
       <p class="eyebrow">Morning Insight Cards</p>
       <h1>오늘의 핵심 뉴스 5개</h1>
-      <p class="brief">업무 적용성 60%, 시장 흐름 40% 기준으로 선별한 개인용 아침 브리핑입니다.</p>
+      <p class="brief">업무 적용성 60%, 시장 흐름 40% 기준으로 선별한 개인용 아침 브리핑입니다. 모든 기사는 발송일 당일 또는 전날 발행 기사만 포함합니다.</p>
       <div class="meta-row">
         <span class="meta-pill">생성: {html.escape(date_label)}</span>
         <span class="meta-pill">주제: {html.escape(topic_labels)}</span>
@@ -574,25 +580,19 @@ def send_email(html_content: str, output_path: Path, generated_at: datetime) -> 
     use_tls = (os_environ_get("SMTP_USE_TLS") or "true").lower() not in {"0", "false", "no"}
 
     date_label = generated_at.strftime("%Y-%m-%d")
-    message = MIMEMultipart("mixed")
+    message = MIMEMultipart("alternative")
     message["Subject"] = f"Morning Insight Cards - {date_label}"
     message["From"] = email_from
     message["To"] = email_to
 
-    alternative = MIMEMultipart("alternative")
-    alternative.attach(
+    message.attach(
         MIMEText(
-            "Morning Insight Cards HTML briefing is attached. Open this email in an HTML-capable client for the full view.",
+            "Morning Insight Cards briefing is available in the HTML body of this email.",
             "plain",
             "utf-8",
         )
     )
-    alternative.attach(MIMEText(html_content, "html", "utf-8"))
-    message.attach(alternative)
-
-    attachment = MIMEApplication(output_path.read_bytes(), _subtype="html")
-    attachment.add_header("Content-Disposition", "attachment", filename=output_path.name)
-    message.attach(attachment)
+    message.attach(MIMEText(html_content, "html", "utf-8"))
 
     with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
         if use_tls:
