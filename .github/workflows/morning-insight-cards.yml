@@ -2,6 +2,9 @@ name: Morning Insight Cards
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   schedule:
     - cron: "0 23 * * 0-4"
 
@@ -19,7 +22,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Generate briefing for push test
+        if: github.event_name == 'push'
+        run: python src/morning_news.py --force --timezone Asia/Seoul
+
       - name: Generate and send briefing
+        if: github.event_name != 'push'
         env:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}

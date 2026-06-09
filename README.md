@@ -40,6 +40,7 @@ GitHub의 `Settings > Secrets and variables > Actions > Repository secrets`에 �
 이는 한국 시간 기준 월요일부터 금요일 오전 8시에 해당합니다.
 
 수동으로 테스트하려면 GitHub 저장소의 `Actions > Morning Insight Cards > Run workflow`를 실행하세요.
+일반 `push`에서는 이메일을 보내지 않고 HTML 생성만 검증합니다.
 
 ## 바로 실행
 
