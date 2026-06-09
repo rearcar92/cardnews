@@ -1,0 +1,102 @@
+{
+  "daily_card_count": 5,
+  "core_card_count": 3,
+  "locale": {
+    "hl": "ko",
+    "gl": "KR",
+    "ceid": "KR:ko"
+  },
+  "topics": [
+    {
+      "id": "payments",
+      "label": "PG/결제/정산",
+      "weight": 1.25,
+      "queries": [
+        "PG 결제 정산",
+        "전자결제 간편결제 정산",
+        "카드사 VAN PG 수수료",
+        "금융위원회 결제 정책"
+      ],
+      "why_it_matters": "결제와 정산 구조 변화는 수수료, 운영 리스크, 파트너 정책에 바로 영향을 줄 수 있습니다.",
+      "action_hint": "현재 담당 중인 정산 흐름, 예외 처리, 제휴사 커뮤니케이션에 바뀔 부분이 있는지 체크해보세요."
+    },
+    {
+      "id": "commerce",
+      "label": "커머스/플랫폼",
+      "weight": 1.15,
+      "queries": [
+        "커머스 플랫폼 이커머스",
+        "네이버 쿠팡 카카오 커머스",
+        "온라인 쇼핑 플랫폼 정책",
+        "마켓플레이스 셀러 정산"
+      ],
+      "why_it_matters": "플랫폼 정책과 커머스 경쟁 변화는 판매자 경험, 결제 UX, 정산 요구사항으로 이어집니다.",
+      "action_hint": "사용자, 셀러, 운영자 중 누구의 문제가 커지는지 나눠 보고 기획 관점의 대응 포인트를 적어보세요."
+    },
+    {
+      "id": "product",
+      "label": "PM/PO/서비스기획",
+      "weight": 1.05,
+      "queries": [
+        "서비스기획 PM PO 프로덕트",
+        "프로덕트 매니지먼트 지표 실험",
+        "UX 리서치 서비스 개선",
+        "B2B SaaS 프로덕트 전략"
+      ],
+      "why_it_matters": "좋은 제품 의사결정 사례는 요구사항 정의, 우선순위, 지표 설계의 참고 재료가 됩니다.",
+      "action_hint": "기사 속 의사결정 기준을 내 업무의 문제 정의, 지표, 정책 문서에 어떻게 옮길 수 있을지 생각해보세요."
+    },
+    {
+      "id": "ai",
+      "label": "AI/업무자동화",
+      "weight": 1.1,
+      "queries": [
+        "AI 업무 자동화 생성형 AI",
+        "오픈AI 구글 마이크로소프트 AI",
+        "AI 에이전트 업무 생산성",
+        "기업 AI 도입 자동화"
+      ],
+      "why_it_matters": "AI 자동화 흐름은 개인 생산성과 서비스 운영 방식 모두를 바꿀 수 있습니다.",
+      "action_hint": "반복 업무, 리포트 작성, 정책 검토, 데이터 확인 중 자동화 후보를 하나 골라 실험 아이디어로 적어보세요."
+    },
+    {
+      "id": "market",
+      "label": "경제/스타트업/테크",
+      "weight": 0.95,
+      "queries": [
+        "경제 스타트업 테크 투자",
+        "금리 환율 플랫폼 기업",
+        "핀테크 스타트업 투자",
+        "빅테크 규제 정책"
+      ],
+      "why_it_matters": "시장 환경과 투자 흐름은 플랫폼 전략, 비용 구조, 신사업 우선순위에 영향을 줍니다.",
+      "action_hint": "이 변화가 우리 회사의 비용, 매출, 파트너, 사용자 행동 중 어디에 영향을 줄지 한 줄로 정리해보세요."
+    }
+  ],
+  "trusted_domains": [
+    "fsc.go.kr",
+    "fss.or.kr",
+    "bok.or.kr",
+    "kisa.or.kr",
+    "kftc.or.kr",
+    "newsroom.kakao.com",
+    "navercorp.com",
+    "about.coupang.com",
+    "openai.com",
+    "blog.google",
+    "microsoft.com",
+    "techcrunch.com",
+    "platum.kr",
+    "byline.network",
+    "zdnet.co.kr",
+    "bloter.net",
+    "etnews.com",
+    "ddaily.co.kr"
+  ],
+  "blocked_terms": [
+    "연예",
+    "스포츠",
+    "날씨",
+    "운세"
+  ]
+}

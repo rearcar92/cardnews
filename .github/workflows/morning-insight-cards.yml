@@ -1,0 +1,41 @@
+name: Morning Insight Cards
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 23 * * 0-4"
+
+jobs:
+  send-morning-briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate and send briefing
+        env:
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
+        run: python src/morning_news.py --email --timezone Asia/Seoul
+
+      - name: Upload generated HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: morning-insight-cards
+          path: |
+            output/*.html
+            logs/*.log
+          if-no-files-found: ignore
