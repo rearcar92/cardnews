@@ -5,8 +5,20 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "index.html"
+      - "output/**"
   schedule:
     - cron: "0 23 * * 0-4"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   send-morning-briefing:
@@ -37,6 +49,28 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
         run: python src/morning_news.py --email --timezone Asia/Seoul
+
+      - name: Build public archive
+        run: python src/build_archive.py
+
+      - name: Commit generated archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f index.html output/*.html
+          git diff --cached --quiet || git commit -m "Update public cardnews archive"
+          git push
+
+      - name: Set up GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
 
       - name: Upload generated HTML
         if: always()
