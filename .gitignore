@@ -7,3 +7,4 @@ env/
 
 logs/*.log
 output/*.html
+output/playwright/

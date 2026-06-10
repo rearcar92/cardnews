@@ -11,13 +11,13 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT_DIR / "output"
 INDEX_PATH = ROOT_DIR / "index.html"
 CARD_FILE_PATTERN = re.compile(r"morning-insight-cards-(\d{4}-\d{2}-\d{2})\.html$")
+WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
 
 @dataclass(frozen=True)
 class ArchiveEntry:
     date: datetime
     filename: str
-    title: str
 
     @property
     def href(self) -> str:
@@ -26,6 +26,14 @@ class ArchiveEntry:
     @property
     def date_label(self) -> str:
         return self.date.strftime("%Y.%m.%d")
+
+    @property
+    def title(self) -> str:
+        return f"{self.date.strftime('%m월 %d일')} 브리핑"
+
+    @property
+    def series(self) -> str:
+        return f"{WEEKDAYS[self.date.weekday()]}요일 카드뉴스"
 
 
 def discover_entries() -> list[ArchiveEntry]:
@@ -37,283 +45,259 @@ def discover_entries() -> list[ArchiveEntry]:
         match = CARD_FILE_PATTERN.match(path.name)
         if not match:
             continue
-        generated_date = datetime.strptime(match.group(1), "%Y-%m-%d")
         entries.append(
             ArchiveEntry(
-                date=generated_date,
+                date=datetime.strptime(match.group(1), "%Y-%m-%d"),
                 filename=path.name,
-                title=f"{generated_date.strftime('%Y.%m.%d')} Morning Insight Cards",
             )
         )
 
     return sorted(entries, key=lambda entry: entry.date, reverse=True)
 
 
+def render_weekday_nav(active_weekday: int) -> str:
+    items = []
+    for index, label in enumerate(WEEKDAYS):
+        active_class = " active" if index == active_weekday else ""
+        items.append(f'<span class="weekday{active_class}">{html.escape(label)}</span>')
+    return "\n".join(items)
+
+
 def render_entry(entry: ArchiveEntry, is_latest: bool) -> str:
-    badge = '<span class="badge">Latest</span>' if is_latest else ""
+    badge = '<span class="new-badge">N</span>' if is_latest else ""
     return f"""
-      <article class="archive-item">
-        <div>
-          <p class="date">{html.escape(entry.date_label)}</p>
-          <h2><a href="{html.escape(entry.href)}">{html.escape(entry.title)}</a></h2>
-        </div>
-        <a class="open-link" href="{html.escape(entry.href)}" aria-label="{html.escape(entry.title)} 열기">열기</a>
-        {badge}
+      <article class="archive-card">
+        <a class="card-link" href="{html.escape(entry.href)}" aria-label="{html.escape(entry.title)} 보기">
+          <div class="card-copy">
+            <p class="series">{html.escape(entry.series)}</p>
+            <h2>{html.escape(entry.title)} {badge}</h2>
+            <p class="byline"><em>by</em> Morning Insight Cards</p>
+          </div>
+          <p class="date-label">{html.escape(entry.date_label)}</p>
+        </a>
       </article>
     """
 
 
 def render_index(entries: list[ArchiveEntry]) -> str:
-    latest = entries[0] if entries else None
-    entry_cards = "\n".join(render_entry(entry, index == 0) for index, entry in enumerate(entries))
-    latest_block = (
-        f"""
-        <section class="latest">
-          <div>
-            <p class="section-label">Latest briefing</p>
-            <h2>{html.escape(latest.title)}</h2>
-            <p>가장 최근에 발송된 카드뉴스입니다. 매일 생성되는 HTML을 날짜별로 보관합니다.</p>
-          </div>
-          <a class="primary-link" href="{html.escape(latest.href)}">최신 카드뉴스 보기</a>
-        </section>
-        """
-        if latest
-        else """
-        <section class="latest">
-          <div>
-            <p class="section-label">Latest briefing</p>
-            <h2>아직 보관된 카드뉴스가 없습니다.</h2>
-            <p>첫 카드뉴스가 생성되면 이곳에 날짜별 아카이브가 자동으로 쌓입니다.</p>
-          </div>
-        </section>
-        """
+    active_weekday = entries[0].date.weekday() if entries else datetime.now().weekday()
+    archive_body = (
+        "\n".join(render_entry(entry, index == 0) for index, entry in enumerate(entries))
+        if entries
+        else '<p class="empty">아직 보관된 카드뉴스가 없습니다.</p>'
     )
-
-    archive_body = entry_cards or '<p class="empty">아직 공개할 카드뉴스 파일이 없습니다.</p>'
-    updated_at = datetime.now().strftime("%Y.%m.%d %H:%M")
 
     return f"""<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Morning Insight Cards Archive</title>
-  <meta name="description" content="매일 발송되는 Morning Insight Cards 공개 아카이브">
+  <title>요일별 연재</title>
+  <meta name="description" content="매일 발송한 카드뉴스 공개 아카이브">
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f5f6f8;
-      --ink: #15171c;
-      --muted: #606977;
-      --line: #d7dde6;
-      --panel: #ffffff;
-      --accent: #176b87;
-      --accent-soft: #e8f4f5;
-      --mark: #a45b10;
+      --bg: #ffffff;
+      --ink: #222222;
+      --muted: #9a9a9a;
+      --line: #e8e8e8;
+      --accent: #13b9b7;
     }}
-    * {{ box-sizing: border-box; }}
+    * {{
+      box-sizing: border-box;
+    }}
     body {{
       margin: 0;
       background: var(--bg);
       color: var(--ink);
       font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
-      line-height: 1.55;
+      letter-spacing: 0;
     }}
     a {{
       color: inherit;
       text-decoration: none;
     }}
-    a:hover {{
-      text-decoration: underline;
-    }}
     .page {{
-      width: min(1040px, calc(100% - 32px));
+      width: min(960px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 40px 0 56px;
+      padding: 116px 0 72px;
     }}
-    header {{
-      display: grid;
-      gap: 14px;
-      margin-bottom: 28px;
+    .masthead {{
+      text-align: center;
+      margin-bottom: 34px;
     }}
-    .eyebrow,
-    .section-label {{
+    .masthead h1 {{
       margin: 0;
-      color: var(--accent);
-      font-size: 14px;
-      font-weight: 800;
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 500;
     }}
-    h1 {{
-      max-width: 760px;
-      margin: 0;
-      font-size: clamp(30px, 5vw, 52px);
-      line-height: 1.12;
-      letter-spacing: 0;
-    }}
-    .intro {{
-      max-width: 760px;
-      margin: 0;
+    .masthead p {{
+      margin: 14px 0 0;
       color: var(--muted);
-      font-size: 17px;
-    }}
-    .stats {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 6px;
-    }}
-    .stat {{
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 999px;
-      padding: 7px 12px;
-      color: #374151;
       font-size: 13px;
-      font-weight: 700;
+      line-height: 1.45;
     }}
-    .latest {{
+    .weekdays {{
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 20px;
+      grid-template-columns: repeat(7, 1fr);
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 29px;
+    }}
+    .weekday {{
+      display: flex;
+      justify-content: center;
       align-items: center;
-      background: var(--accent-soft);
-      border: 1px solid #bad9dd;
-      border-radius: 8px;
-      padding: 24px;
-      margin-bottom: 26px;
+      height: 38px;
+      color: #969696;
+      font-size: 14px;
+      position: relative;
     }}
-    .latest h2 {{
-      margin: 4px 0 8px;
-      font-size: 26px;
-      letter-spacing: 0;
+    .weekday.active {{
+      color: #202020;
+      font-weight: 500;
     }}
-    .latest p {{
+    .weekday.active::after {{
+      content: "";
+      position: absolute;
+      left: 35%;
+      right: 35%;
+      bottom: -1px;
+      height: 1px;
+      background: var(--accent);
+    }}
+    .sort-row {{
+      display: flex;
+      justify-content: flex-end;
+      gap: 24px;
+      margin: 0 0 28px;
+      color: #9b9b9b;
+      font-size: 13px;
+    }}
+    .sort-row span:first-child {{
+      color: #606060;
+      position: relative;
+    }}
+    .sort-row span:first-child::before {{
+      content: "";
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+      position: absolute;
+      left: -8px;
+      top: 7px;
+    }}
+    .archive-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px 20px;
+    }}
+    .archive-card {{
+      min-height: 152px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+    }}
+    .card-link {{
+      min-height: 152px;
+      padding: 21px 20px 19px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+    }}
+    .series {{
+      margin: 0 0 8px;
+      color: #969696;
+      font-size: 14px;
+      line-height: 1.35;
+    }}
+    .archive-card h2 {{
       margin: 0;
-      color: #3c4653;
+      color: #202020;
+      font-size: 16px;
+      line-height: 1.65;
+      font-weight: 400;
     }}
-    .primary-link,
-    .open-link {{
+    .new-badge {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 40px;
-      border-radius: 6px;
-      font-weight: 800;
-      white-space: nowrap;
-    }}
-    .primary-link {{
+      width: 16px;
+      height: 16px;
+      margin-left: 3px;
+      border-radius: 50%;
       background: var(--accent);
       color: #ffffff;
-      padding: 0 15px;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      vertical-align: 1px;
     }}
-    .archive {{
-      display: grid;
-      gap: 10px;
-    }}
-    .archive-title {{
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: end;
-      border-bottom: 1px solid var(--line);
-      padding-bottom: 12px;
-      margin-bottom: 2px;
-    }}
-    .archive-title h2 {{
-      margin: 0;
-      font-size: 22px;
-      letter-spacing: 0;
-    }}
-    .updated {{
-      margin: 0;
-      color: var(--muted);
+    .byline {{
+      margin: 18px 0 0;
+      color: #aaa;
       font-size: 13px;
+      line-height: 1.45;
     }}
-    .archive-item {{
-      position: relative;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 18px;
-      align-items: center;
-      min-height: 86px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 17px 18px;
+    .byline em {{
+      color: #b8b8b8;
+      font-family: Georgia, serif;
+      font-style: italic;
     }}
-    .date {{
-      margin: 0 0 4px;
-      color: var(--mark);
-      font-size: 13px;
-      font-weight: 800;
-    }}
-    .archive-item h2 {{
+    .date-label {{
+      min-width: 86px;
       margin: 0;
-      font-size: 19px;
-      line-height: 1.35;
-      letter-spacing: 0;
-    }}
-    .open-link {{
-      border: 1px solid var(--line);
-      color: var(--accent);
-      padding: 0 12px;
-    }}
-    .badge {{
-      position: absolute;
-      top: 10px;
-      right: 72px;
-      color: var(--accent);
-      font-size: 12px;
-      font-weight: 900;
+      color: #9c9c9c;
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: right;
     }}
     .empty {{
+      grid-column: 1 / -1;
       margin: 0;
-      background: var(--panel);
+      padding: 40px 20px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 20px;
       color: var(--muted);
+      text-align: center;
+      font-size: 14px;
     }}
-    @media (max-width: 720px) {{
+    @media (max-width: 760px) {{
       .page {{
-        width: min(100% - 22px, 640px);
-        padding-top: 26px;
+        width: min(100% - 24px, 520px);
+        padding-top: 72px;
       }}
-      .latest,
-      .archive-item {{
+      .archive-grid {{
         grid-template-columns: 1fr;
       }}
-      .primary-link,
-      .open-link {{
-        width: 100%;
+      .sort-row {{
+        gap: 18px;
       }}
-      .archive-title {{
-        display: grid;
+      .card-link {{
+        grid-template-columns: 1fr;
+        gap: 14px;
       }}
-      .badge {{
-        right: 18px;
+      .date-label {{
+        text-align: left;
       }}
     }}
   </style>
 </head>
 <body>
   <main class="page">
-    <header>
-      <p class="eyebrow">Morning Insight Cards Archive</p>
-      <h1>매일 아침 쌓이는 결제, 정산, PM 인사이트</h1>
-      <p class="intro">업무에 바로 적용할 뉴스와 시장 흐름을 날짜별로 보관하는 공개 아카이브입니다.</p>
-      <div class="stats">
-        <span class="stat">총 {len(entries)}개 브리핑</span>
-        <span class="stat">평일 오전 8시 기준</span>
-        <span class="stat">공개 아카이브</span>
-      </div>
+    <header class="masthead">
+      <h1>요일별 연재</h1>
+      <p>브런치북 오리지널 연재를 만나 보세요.</p>
     </header>
-    {latest_block}
-    <section class="archive" aria-labelledby="archive-heading">
-      <div class="archive-title">
-        <h2 id="archive-heading">전체 카드뉴스</h2>
-        <p class="updated">마지막 갱신: {html.escape(updated_at)}</p>
-      </div>
+    <nav class="weekdays" aria-label="요일 목록">
+      {render_weekday_nav(active_weekday)}
+    </nav>
+    <div class="sort-row" aria-label="정렬 옵션">
+      <span>최신순</span>
+      <span>응원순</span>
+      <span>라이킷순</span>
+    </div>
+    <section class="archive-grid" aria-label="카드뉴스 목록">
       {archive_body}
     </section>
   </main>
