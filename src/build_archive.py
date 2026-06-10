@@ -360,13 +360,14 @@ def render_index(issues: list[ArchiveIssue]) -> str:
       position: relative;
     }}
     .calendar-button {{
-      width: 30px;
-      height: 30px;
-      border: 1px solid var(--line);
+      width: 20px;
+      height: 20px;
+      border: 0;
       color: #777777;
       display: grid;
       place-items: center;
       background: #ffffff;
+      padding: 0;
     }}
     .calendar-button svg {{
       width: 15px;
@@ -380,7 +381,7 @@ def render_index(issues: list[ArchiveIssue]) -> str:
       top: 38px;
       right: 0;
       z-index: 10;
-      width: 260px;
+      width: 240px;
       border: 1px solid var(--line);
       background: #ffffff;
       padding: 16px;
@@ -395,24 +396,14 @@ def render_index(issues: list[ArchiveIssue]) -> str:
       color: #606060;
       font-size: 13px;
     }}
-    .calendar-options {{
-      display: grid;
-      gap: 8px;
-      max-height: 180px;
-      overflow: auto;
-    }}
-    .calendar-option {{
-      min-height: 34px;
+    .calendar-input {{
+      width: 100%;
+      height: 36px;
       border: 1px solid var(--line);
       color: #777777;
       background: #ffffff;
-      text-align: left;
       padding: 0 10px;
       font-size: 13px;
-    }}
-    .calendar-option.active {{
-      border-color: var(--accent);
-      color: #202020;
     }}
     .calendar-confirm {{
       width: 100%;
@@ -641,7 +632,7 @@ def render_index(issues: list[ArchiveIssue]) -> str:
         </button>
         <div class="calendar-popover" id="calendarPopover" aria-label="날짜 선택 달력">
           <p class="calendar-title">날짜 선택</p>
-          <div class="calendar-options" id="calendarOptions"></div>
+          <input class="calendar-input" id="calendarInput" type="date" aria-label="년월일 선택">
           <button class="calendar-confirm" id="calendarConfirm" type="button">확인</button>
         </div>
       </div>
@@ -662,7 +653,7 @@ def render_index(issues: list[ArchiveIssue]) -> str:
     const weekdayButtons = [...document.querySelectorAll(".weekday")];
     const calendarButton = document.getElementById("calendarButton");
     const calendarPopover = document.getElementById("calendarPopover");
-    const calendarOptions = document.getElementById("calendarOptions");
+    const calendarInput = document.getElementById("calendarInput");
     const calendarConfirm = document.getElementById("calendarConfirm");
     const cardGrid = document.getElementById("cardGrid");
     const detailPanel = document.getElementById("detailPanel");
@@ -683,13 +674,41 @@ def render_index(issues: list[ArchiveIssue]) -> str:
     }}
 
     function currentIssue() {{
-      return issues.find((issue) => issue.key === activeIssueKey) || currentIssues()[0] || issues[0];
+      return issues.find((issue) => issue.key === activeIssueKey) || null;
+    }}
+
+    function todayKey() {{
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${{year}}-${{month}}-${{day}}`;
+    }}
+
+    function weekdayIndexFromKey(key) {{
+      if (!key) {{
+        return activeWeekday;
+      }}
+      return new Date(`${{key}}T00:00:00`).getDay() === 0
+        ? 6
+        : new Date(`${{key}}T00:00:00`).getDay() - 1;
+    }}
+
+    function weekdayLabelFromKey(key) {{
+      return ["월", "화", "수", "목", "금", "토", "일"][weekdayIndexFromKey(key)] || "";
+    }}
+
+    function dateLabelFromKey(key) {{
+      if (!key) {{
+        return "날짜 없음";
+      }}
+      return key.replaceAll("-", ".");
     }}
 
     function setWeekday(index) {{
       activeWeekday = index;
       const filtered = currentIssues();
-      activeIssueKey = filtered[0]?.key || issues[0]?.key || "";
+      activeIssueKey = filtered[0]?.key || "";
       pendingIssueKey = activeIssueKey;
       activeCardIndex = -1;
       render();
@@ -701,6 +720,8 @@ def render_index(issues: list[ArchiveIssue]) -> str:
       const selectedIssue = issues.find((issue) => issue.key === key);
       if (selectedIssue) {{
         activeWeekday = selectedIssue.weekdayIndex;
+      }} else {{
+        activeWeekday = weekdayIndexFromKey(key);
       }}
       activeCardIndex = -1;
       render();
@@ -725,28 +746,17 @@ def render_index(issues: list[ArchiveIssue]) -> str:
     }}
 
     function renderCalendar() {{
-      const filtered = currentIssues();
-      calendarOptions.innerHTML = filtered.length
-        ? filtered.map((issue) => `
-          <button class="calendar-option ${{issue.key === pendingIssueKey ? "active" : ""}}" type="button" data-key="${{issue.key}}">
-            ${{escapeHtml(issue.dateLabel)}} (${{escapeHtml(issue.weekday)}})
-          </button>
-        `).join("")
-        : '<p class="calendar-title">해당 요일 카드뉴스가 없습니다.</p>';
-
-      [...calendarOptions.querySelectorAll(".calendar-option")].forEach((button) => {{
-        button.addEventListener("click", () => {{
-          pendingIssueKey = button.dataset.key;
-          renderCalendar();
-        }});
-      }});
+      calendarInput.max = todayKey();
+      calendarInput.value = pendingIssueKey || activeIssueKey || todayKey();
     }}
 
     function renderCards() {{
       const issue = currentIssue();
       if (!issue || !issue.cards.length) {{
-        cardGrid.innerHTML = '<p class="empty">선택한 날짜에 표시할 카드뉴스가 없습니다.</p>';
-        selectedDate.textContent = "카드뉴스 없음";
+        cardGrid.innerHTML = '<p class="empty">해당 요일 카드뉴스가 없습니다.</p>';
+        selectedDate.textContent = activeIssueKey
+          ? `${{dateLabelFromKey(activeIssueKey)}} (${{weekdayLabelFromKey(activeIssueKey)}})`
+          : `${{["월", "화", "수", "목", "금", "토", "일"][activeWeekday]}}요일`;
         selectedCount.textContent = "0개 카드뉴스";
         return;
       }}
@@ -824,8 +834,14 @@ def render_index(issues: list[ArchiveIssue]) -> str:
       renderCalendar();
       calendarPopover.classList.toggle("open");
     }});
+    calendarInput.addEventListener("change", () => {{
+      pendingIssueKey = calendarInput.value;
+    }});
     calendarConfirm.addEventListener("click", () => {{
       if (pendingIssueKey) {{
+        if (pendingIssueKey > todayKey()) {{
+          pendingIssueKey = todayKey();
+        }}
         setIssue(pendingIssueKey);
       }}
       calendarPopover.classList.remove("open");

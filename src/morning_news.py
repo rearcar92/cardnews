@@ -110,6 +110,19 @@ def fetch_url(url: str, timeout_seconds: int = 15) -> bytes:
         return response.read()
 
 
+def fetch_html_url(url: str, timeout_seconds: int = 8) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "MorningInsightCards/1.0 (+local personal briefing)",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        charset = response.headers.get_content_charset() or "utf-8"
+        return response.read().decode(charset, errors="ignore")
+
+
 def clean_text(value: str) -> str:
     value = re.sub(r"<[^>]+>", " ", value)
     value = html.unescape(value)
@@ -117,7 +130,20 @@ def clean_text(value: str) -> str:
     return value
 
 
-def extract_thumbnail_url(value: str) -> str:
+def extract_thumbnail_url(value: str, item: ElementTree.Element | None = None) -> str:
+    if item is not None:
+        for child in item.iter():
+            tag = child.tag.lower()
+            image_url = child.attrib.get("url", "").strip()
+            image_type = child.attrib.get("type", "").lower()
+            if image_url and (
+                tag.endswith("thumbnail")
+                or tag.endswith("content")
+                or tag.endswith("image")
+                or image_type.startswith("image/")
+            ):
+                return html.unescape(image_url)
+
     patterns = [
         r'<img[^>]+src=["\']([^"\']+)["\']',
         r'<media:thumbnail[^>]+url=["\']([^"\']+)["\']',
@@ -128,6 +154,32 @@ def extract_thumbnail_url(value: str) -> str:
         if match:
             return html.unescape(match.group(1)).strip()
     return ""
+
+
+def extract_html_thumbnail_url(value: str) -> str:
+    patterns = [
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, value, flags=re.IGNORECASE)
+        if match:
+            return html.unescape(match.group(1)).strip()
+    return ""
+
+
+def enrich_thumbnails(items: list[NewsItem]) -> None:
+    for item in items:
+        if item.thumbnail_url:
+            continue
+        try:
+            item.thumbnail_url = extract_html_thumbnail_url(fetch_html_url(item.url))
+            if item.thumbnail_url:
+                logging.info("Fetched thumbnail source=%s title=%s", item.source, item.title)
+        except Exception as exc:
+            logging.info("Thumbnail unavailable source=%s error=%s", item.source, exc)
 
 
 def parse_source(item: ElementTree.Element, title: str) -> str:
@@ -215,7 +267,7 @@ def parse_rss_items(
         url = clean_text(item.findtext("link", ""))
         raw_summary = item.findtext("description", "")
         summary = clean_text(raw_summary)
-        thumbnail_url = extract_thumbnail_url(raw_summary)
+        thumbnail_url = extract_thumbnail_url(raw_summary, item)
         if not title or not url:
             continue
         if any(term in f"{title} {summary}" for term in blocked_terms):
@@ -644,6 +696,7 @@ def main() -> int:
         items = collect_news(config, now)
         daily_count = int(config.get("daily_card_count", 5))
         selected = select_news(items, daily_count)
+        enrich_thumbnails(selected)
         html_content = render_html(selected, config, now)
         output_path = write_html(html_content, now)
         logging.info("Generated %s with %s cards from %s collected items", output_path, len(selected), len(items))
