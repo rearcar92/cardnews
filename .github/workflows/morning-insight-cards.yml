@@ -9,7 +9,7 @@ on:
       - "index.html"
       - "output/**"
   schedule:
-    - cron: "0 23 * * 0-4"
+    - cron: "7 23 * * 0-4"
 
 permissions:
   contents: write
@@ -35,11 +35,11 @@ jobs:
           python-version: "3.12"
 
       - name: Generate briefing for push test
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[send-now]')
         run: python src/morning_news.py --force --timezone Asia/Seoul
 
       - name: Generate and send briefing
-        if: github.event_name != 'push'
+        if: github.event_name != 'push' || contains(github.event.head_commit.message, '[send-now]')
         env:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}

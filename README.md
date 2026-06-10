@@ -24,7 +24,7 @@
 
 ## GitHub Actions 자동 발송
 
-GitHub Actions가 평일 오전 8시(KST)에 실행되어 HTML 카드뉴스를 이메일 본문으로 발송합니다.
+GitHub Actions가 평일 오전 8시 7분(KST)에 실행되어 HTML 카드뉴스를 이메일 본문으로 발송합니다.
 첨부 HTML 파일은 보내지 않고, 백업용 HTML은 GitHub Actions artifact로만 보관합니다.
 
 GitHub의 `Settings > Secrets and variables > Actions > Repository secrets`에 아래 값을 등록하세요.
@@ -37,11 +37,13 @@ GitHub의 `Settings > Secrets and variables > Actions > Repository secrets`에 �
 - `SMTP_PASSWORD`: SMTP 비밀번호 또는 앱 비밀번호
 - `SMTP_USE_TLS`: 보통 `true`
 
-스케줄은 GitHub Actions가 UTC 기준으로 동작하기 때문에 `0 23 * * 0-4`로 설정되어 있습니다.
-이는 한국 시간 기준 월요일부터 금요일 오전 8시에 해당합니다.
+스케줄은 GitHub Actions가 UTC 기준으로 동작하기 때문에 `7 23 * * 0-4`로 설정되어 있습니다.
+이는 한국 시간 기준 월요일부터 금요일 오전 8시 7분에 해당합니다.
+GitHub 예약 실행은 정각에 지연되거나 누락될 수 있어 정각을 살짝 피했습니다.
 
 수동으로 테스트하려면 GitHub 저장소의 `Actions > Morning Insight Cards > Run workflow`를 실행하세요.
 일반 `push`에서는 이메일을 보내지 않고 HTML 생성만 검증합니다.
+즉시 발송이 필요하면 커밋 메시지에 `[send-now]`를 포함한 push에서만 이메일을 보냅니다.
 
 ## 바로 실행
 
