@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>요일별 연재</title>
+  <title>요일별 카드뉴스</title>
   <meta name="description" content="매일 발송한 카드뉴스 공개 아카이브">
   <style>
     :root {
       color-scheme: light;
       --bg: #ffffff;
-      --ink: #222222;
+      --ink: #202020;
       --muted: #9a9a9a;
-      --line: #e8e8e8;
-      --accent: #13b9b7;
+      --line: #e9e9e9;
+      --accent: #12b9b5;
+      --panel: #ffffff;
     }
     * {
       box-sizing: border-box;
@@ -24,6 +25,15 @@
       font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
       letter-spacing: 0;
     }
+    button,
+    select {
+      font: inherit;
+    }
+    button {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
     a {
       color: inherit;
       text-decoration: none;
@@ -31,11 +41,11 @@
     .page {
       width: min(960px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 116px 0 72px;
+      padding: 64px 0 72px;
     }
     .masthead {
       text-align: center;
-      margin-bottom: 34px;
+      margin-bottom: 24px;
     }
     .masthead h1 {
       margin: 0;
@@ -53,16 +63,13 @@
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       border-bottom: 1px solid var(--line);
-      margin-bottom: 29px;
+      margin-bottom: 14px;
     }
     .weekday {
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      position: relative;
       height: 38px;
       color: #969696;
       font-size: 14px;
-      position: relative;
     }
     .weekday.active {
       color: #202020;
@@ -77,19 +84,22 @@
       height: 1px;
       background: var(--accent);
     }
-    .sort-row {
+    .issue-head {
       display: flex;
       justify-content: flex-end;
-      gap: 24px;
-      margin: 0 0 28px;
+      gap: 18px;
+      align-items: center;
+      margin: 0 0 18px;
       color: #9b9b9b;
       font-size: 13px;
-    }
-    .sort-row span:first-child {
-      color: #606060;
       position: relative;
     }
-    .sort-row span:first-child::before {
+    .issue-head strong {
+      position: relative;
+      color: #606060;
+      font-weight: 400;
+    }
+    .issue-head strong::before {
       content: "";
       width: 4px;
       height: 4px;
@@ -99,97 +109,267 @@
       left: -8px;
       top: 7px;
     }
-    .archive-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 20px 20px;
+    .calendar-wrap {
+      position: relative;
     }
-    .archive-card {
-      min-height: 152px;
+    .calendar-button {
+      width: 30px;
+      height: 30px;
       border: 1px solid var(--line);
+      color: #777777;
+      display: grid;
+      place-items: center;
       background: #ffffff;
     }
-    .card-link {
-      min-height: 152px;
-      padding: 21px 20px 19px;
+    .calendar-button svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+    .calendar-popover {
+      position: absolute;
+      top: 38px;
+      right: 0;
+      z-index: 10;
+      width: 260px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      padding: 16px;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.08);
+      display: none;
+    }
+    .calendar-popover.open {
+      display: block;
+    }
+    .calendar-title {
+      margin: 0 0 12px;
+      color: #606060;
+      font-size: 13px;
+    }
+    .calendar-options {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .calendar-option {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      color: #777777;
+      background: #ffffff;
+      text-align: left;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+    .calendar-option.active {
+      border-color: var(--accent);
+      color: #202020;
+    }
+    .calendar-confirm {
+      width: 100%;
+      min-height: 34px;
+      margin-top: 12px;
+      border: 1px solid var(--accent);
+      color: #202020;
+      background: #ffffff;
+      font-size: 13px;
+    }
+    .content-layout {
+      display: grid;
       gap: 18px;
       align-items: start;
     }
-    .series {
-      margin: 0 0 8px;
+    .thumbnail-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .thumb-card {
+      min-height: 86px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      text-align: left;
+      padding: 12px 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 82px;
+      gap: 18px;
+      align-items: center;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .thumb-card.active,
+    .thumb-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 8px 20px rgba(18, 185, 181, 0.08);
+    }
+    .thumb-meta {
+      margin: 0 0 7px;
       color: #969696;
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1.35;
     }
-    .archive-card h2 {
+    .thumb-card h2 {
       margin: 0;
       color: #202020;
-      font-size: 16px;
-      line-height: 1.65;
+      font-size: 15px;
+      line-height: 1.38;
       font-weight: 400;
     }
+    .thumb-desc {
+      margin: 6px 0 0;
+      color: #9a9a9a;
+      font-size: 13px;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .thumb-art {
+      width: 82px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      color: rgba(32, 32, 32, 0.54);
+      font-size: 22px;
+      font-weight: 300;
+      overflow: hidden;
+    }
+    .thumb-art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     .new-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      height: 16px;
+      display: inline-grid;
+      place-items: center;
+      width: 15px;
+      height: 15px;
       margin-left: 3px;
       border-radius: 50%;
       background: var(--accent);
       color: #ffffff;
       font-size: 10px;
       font-weight: 700;
-      line-height: 1;
       vertical-align: 1px;
     }
-    .byline {
-      margin: 18px 0 0;
-      color: #aaa;
+    .detail-panel {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.82);
+      padding: 24px;
+    }
+    .detail-panel.open {
+      display: flex;
+    }
+    .detail-card {
+      width: min(620px, 100%);
+      max-height: min(720px, calc(100vh - 48px));
+      overflow: auto;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      padding: 26px;
+      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.08);
+    }
+    .detail-kicker {
+      margin: 0 0 9px;
+      color: #969696;
       font-size: 13px;
-      line-height: 1.45;
     }
-    .byline em {
-      color: #b8b8b8;
-      font-family: Georgia, serif;
-      font-style: italic;
-    }
-    .date-label {
-      min-width: 86px;
+    .detail-panel h2 {
       margin: 0;
-      color: #9c9c9c;
+      font-size: 18px;
+      line-height: 1.55;
+      font-weight: 400;
+    }
+    .detail-close {
+      float: right;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      color: #888888;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .detail-section {
+      border-top: 1px solid var(--line);
+      margin-top: 18px;
+      padding-top: 15px;
+    }
+    .detail-section h3 {
+      margin: 0 0 7px;
+      color: #666666;
       font-size: 13px;
-      line-height: 1.4;
-      text-align: right;
+      font-weight: 500;
+    }
+    .detail-section p,
+    .detail-section li {
+      color: #555555;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .detail-section p {
+      margin: 0;
+    }
+    .detail-section ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .detail-actions {
+      display: grid;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .detail-actions a {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555555;
+      font-size: 13px;
+    }
+    .detail-actions a.primary {
+      border-color: var(--accent);
+      color: #202020;
     }
     .empty {
       grid-column: 1 / -1;
-      margin: 0;
       padding: 40px 20px;
       border: 1px solid var(--line);
       color: var(--muted);
       text-align: center;
       font-size: 14px;
     }
-    @media (max-width: 760px) {
+    @media (max-width: 900px) {}
+    @media (max-width: 680px) {
       .page {
         width: min(100% - 24px, 520px);
-        padding-top: 72px;
+        padding-top: 70px;
       }
-      .archive-grid {
+      .issue-head {
+        justify-content: flex-start;
+      }
+      .calendar-popover {
+        left: 0;
+        right: auto;
+      }
+      .thumbnail-grid {
         grid-template-columns: 1fr;
       }
-      .sort-row {
-        gap: 18px;
-      }
-      .card-link {
-        grid-template-columns: 1fr;
+      .thumb-card {
+        grid-template-columns: minmax(0, 1fr) 64px;
         gap: 14px;
       }
-      .date-label {
-        text-align: left;
+      .thumb-art {
+        width: 64px;
+        height: 64px;
       }
     }
   </style>
@@ -197,37 +377,235 @@
 <body>
   <main class="page">
     <header class="masthead">
-      <h1>요일별 연재</h1>
-      <p>브런치북 오리지널 연재를 만나 보세요.</p>
+      <h1>요일별 카드뉴스</h1>
+      <p>날짜를 선택하고 오늘의 5개 카드뉴스를 확인해 보세요.</p>
     </header>
-    <nav class="weekdays" aria-label="요일 목록">
-      <span class="weekday">월</span>
-<span class="weekday">화</span>
-<span class="weekday active">수</span>
-<span class="weekday">목</span>
-<span class="weekday">금</span>
-<span class="weekday">토</span>
-<span class="weekday">일</span>
+    <nav class="weekdays" aria-label="요일 선택">
+      <button class="weekday" type="button" data-weekday="0">월</button>
+<button class="weekday" type="button" data-weekday="1">화</button>
+<button class="weekday active" type="button" data-weekday="2">수</button>
+<button class="weekday" type="button" data-weekday="3">목</button>
+<button class="weekday" type="button" data-weekday="4">금</button>
+<button class="weekday" type="button" data-weekday="5">토</button>
+<button class="weekday" type="button" data-weekday="6">일</button>
     </nav>
-    <div class="sort-row" aria-label="정렬 옵션">
-      <span>최신순</span>
-      <span>응원순</span>
-      <span>라이킷순</span>
+    <div class="issue-head">
+      <strong id="selectedDate">최신순</strong>
+      <div class="calendar-wrap">
+        <button class="calendar-button" id="calendarButton" type="button" aria-label="날짜 선택">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="5" width="17" height="15.5" rx="2"></rect>
+            <path d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17"></path>
+          </svg>
+        </button>
+        <div class="calendar-popover" id="calendarPopover" aria-label="날짜 선택 달력">
+          <p class="calendar-title">날짜 선택</p>
+          <div class="calendar-options" id="calendarOptions"></div>
+          <button class="calendar-confirm" id="calendarConfirm" type="button">확인</button>
+        </div>
+      </div>
+      <span id="selectedCount">5개 카드뉴스</span>
     </div>
-    <section class="archive-grid" aria-label="카드뉴스 목록">
-      
-      <article class="archive-card">
-        <a class="card-link" href="output/morning-insight-cards-2026-06-10.html" aria-label="06월 10일 브리핑 보기">
-          <div class="card-copy">
-            <p class="series">수요일 카드뉴스</p>
-            <h2>06월 10일 브리핑 <span class="new-badge">N</span></h2>
-            <p class="byline"><em>by</em> Morning Insight Cards</p>
-          </div>
-          <p class="date-label">2026.06.10</p>
-        </a>
-      </article>
-    
+    <section class="content-layout" aria-label="카드뉴스">
+      <div class="thumbnail-grid" id="cardGrid"></div>
     </section>
+    <aside class="detail-panel" id="detailPanel" aria-live="polite"></aside>
   </main>
+  <script>
+    const issues = [{"key": "2026-06-10", "href": "output/morning-insight-cards-2026-06-10.html", "dateLabel": "2026.06.10", "shortDateLabel": "06.10", "weekday": "수", "weekdayIndex": 2, "title": "06월 10일 카드뉴스", "cards": [{"tier": "핵심 1", "topic": "PG/결제/정산", "title": "“규제는 장벽 아닌 인프라… 신뢰 있어야 시장도 성장” [AI금융의 과제 ⑦] - IT조선", "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE55ZDgtWl9HX0VEVVBrZDJGY0xwUkZmQjRPMGpjN3lzSnhSSG1SWGlPSTJ2QWp4NGlvbFZsOEc4dmxVWlVob2tEVHY4MnlZQVdxU2QtYWcyei1mbnVXeExXQVJsUGpqYi1Fb3p4bVZFZTFaTWt40gF0QVVfeXFMTnlkOC1aX0dfRURVUGtkMkZjTHBSRmZCNE8wamM3eXNKeFJIbVJYaU9JMnZBang0aW9sVmw4Rzh2bFVaVWhva0RUdjgyeVlBV3FTZC1hZzJ6LWZudVd4TFdBUmxQampiLUVvenhtVkVlMVpNa3g?oc=5", "summary": ["“규제는 장벽 아닌 인프라… 신뢰 있어야 시장도 성장” [AI금융의 과제 ⑦] IT조선"], "why": "결제와 정산 구조 변화는 수수료, 운영 리스크, 파트너 정책에 바로 영향을 줄 수 있습니다.", "action": "현재 담당 중인 정산 흐름, 예외 처리, 제휴사 커뮤니케이션에 바뀔 부분이 있는지 체크해보세요.", "sourceMeta": "IT조선 · 2026.06.09 00:10", "thumbnailUrl": "", "thumbColor": "#e8f4f5"}, {"tier": "핵심 2", "topic": "커머스/플랫폼", "title": "국민이 '성별 균형 정책' 제안하는 온라인 플랫폼 열렸다 - 네이트", "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTE9Yc2wyemMzY2FTWlZRMHJMcDROWlhXQlFBc0NTMFNvYjU2ZEl6RWlRTVN3b1BXWktzZ2V0NmZmajktaTYzWHI1TXBvS0dtaUVJcnJZ?oc=5", "summary": ["국민이 '성별 균형 정책' 제안하는 온라인 플랫폼 열렸다 네이트"], "why": "플랫폼 정책과 커머스 경쟁 변화는 판매자 경험, 결제 UX, 정산 요구사항으로 이어집니다.", "action": "사용자, 셀러, 운영자 중 누구의 문제가 커지는지 나눠 보고 기획 관점의 대응 포인트를 적어보세요.", "sourceMeta": "네이트 · 2026.06.10 03:01", "thumbnailUrl": "", "thumbColor": "#f4f0e8"}, {"tier": "핵심 3", "topic": "AI/업무자동화", "title": "NH농협은행, 'Agentic AI Bank' 선언…금융권 AI 경쟁, 서비스 넘어 업무 자동화로 - 이코노미사이언스", "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE9NS2pjUUEwSkR0amZkdGJpU0xCQ1JhV1lBN085Q1ItT091c2dNdVdGTkE3RkNMWFUtMWtrSkVadU1hUnJmNGxFRVB5dHVwWmlQRER4VUtmRWRiU0FXdXJBSWdfamlOMEY1M3dTTHZQOA?oc=5", "summary": ["NH농협은행, 'Agentic AI Bank' 선언…금융권 AI 경쟁, 서비스 넘어 업무 자동화로 이코노미사이언스"], "why": "AI 자동화 흐름은 개인 생산성과 서비스 운영 방식 모두를 바꿀 수 있습니다.", "action": "반복 업무, 리포트 작성, 정책 검토, 데이터 확인 중 자동화 후보를 하나 골라 실험 아이디어로 적어보세요.", "sourceMeta": "이코노미사이언스 · 2026.06.09 06:54", "thumbnailUrl": "", "thumbColor": "#eef2f7"}, {"tier": "참고 4", "topic": "경제/스타트업/테크", "title": "[스타트업 안테나] 베슬AI WEF 혁신기업 선정·에임인텔리전스 전략투자·위플로 드론 품질검사 자동화 - 테크42", "url": "https://news.google.com/rss/articles/CBMixAJBVV95cUxQZnJ3dU9JTUNUSlBsckpGcW5IaXY0U01LVzhRZF8tLUx3NzJNcE42OGhPTkdONVRmUjNYWW4wb3dZY1paYlBfMDlDRmhnQUNublFmdE9qak1hMmF3MlE2c0NMYnZ6X2NybHRQam10REhSaTVqTC14OW5SV0NseWx3QmJRTWpuTUZlRHVfRDAzNElCbWI1bzhGSFJmdVpXY0JyMkpFZG80MEZXRWR6TzVLVDZVZ0pXWDhnYW5TYzNtRnlTTGJOUS0zcHJqNWR3d0hmY1RYRjREMUZEbmE1V01CU0hJWjNVMnY2elVzaDVIalFpaExxOU5mWTZBU0xvOU9CN0JSMGlZcW9VODU1ZUZRNUEyVTA4ZzRmMzJvWXpLMVNUUC00MmowVm05N29EZWlCQUgwRTN3SmZaczJhNG5iZ21CUVI?oc=5", "summary": ["[스타트업 안테나] 베슬AI WEF 혁신기업 선정·에임인텔리전스 전략투자·위플로 드론 품질검사 자동화 테크42"], "why": "시장 환경과 투자 흐름은 플랫폼 전략, 비용 구조, 신사업 우선순위에 영향을 줍니다.", "action": "이 변화가 우리 회사의 비용, 매출, 파트너, 사용자 행동 중 어디에 영향을 줄지 한 줄로 정리해보세요.", "sourceMeta": "테크42 · 2026.06.09 23:31", "thumbnailUrl": "", "thumbColor": "#f2eef7"}, {"tier": "참고 5", "topic": "PG/결제/정산", "title": "AI 에이전트가 알아서 결제하는 시대…“첫 타깃은 1.3조 선불결제 시장” - 매일경제", "url": "https://news.google.com/rss/articles/CBMiUkFVX3lxTE1KcWRSLVpfSHlvTm9aVGI3RDhLWmpzUm50UWcxX2FPSy1QN090OFU3SnFtUm1ieUF1WFY1TENzZXJnMlB5clVWX0p3Q3plWC1qZHc?oc=5", "summary": ["AI 에이전트가 알아서 결제하는 시대…“첫 타깃은 1.3조 선불결제 시장” 매일경제"], "why": "결제와 정산 구조 변화는 수수료, 운영 리스크, 파트너 정책에 바로 영향을 줄 수 있습니다.", "action": "현재 담당 중인 정산 흐름, 예외 처리, 제휴사 커뮤니케이션에 바뀔 부분이 있는지 체크해보세요.", "sourceMeta": "매일경제 · 2026.06.09 07:07", "thumbnailUrl": "", "thumbColor": "#edf4ee"}]}, {"key": "2026-06-09", "href": "output/morning-insight-cards-2026-06-09.html", "dateLabel": "2026.06.09", "shortDateLabel": "06.09", "weekday": "화", "weekdayIndex": 1, "title": "06월 09일 카드뉴스", "cards": []}];
+    let activeWeekday = 2;
+    let activeIssueKey = issues[0]?.key || "";
+    let activeCardIndex = -1;
+    let pendingIssueKey = activeIssueKey;
+
+    const weekdayButtons = [...document.querySelectorAll(".weekday")];
+    const calendarButton = document.getElementById("calendarButton");
+    const calendarPopover = document.getElementById("calendarPopover");
+    const calendarOptions = document.getElementById("calendarOptions");
+    const calendarConfirm = document.getElementById("calendarConfirm");
+    const cardGrid = document.getElementById("cardGrid");
+    const detailPanel = document.getElementById("detailPanel");
+    const selectedDate = document.getElementById("selectedDate");
+    const selectedCount = document.getElementById("selectedCount");
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function currentIssues() {
+      return issues.filter((issue) => issue.weekdayIndex === activeWeekday);
+    }
+
+    function currentIssue() {
+      return issues.find((issue) => issue.key === activeIssueKey) || currentIssues()[0] || issues[0];
+    }
+
+    function setWeekday(index) {
+      activeWeekday = index;
+      const filtered = currentIssues();
+      activeIssueKey = filtered[0]?.key || issues[0]?.key || "";
+      pendingIssueKey = activeIssueKey;
+      activeCardIndex = -1;
+      render();
+    }
+
+    function setIssue(key) {
+      activeIssueKey = key;
+      pendingIssueKey = key;
+      const selectedIssue = issues.find((issue) => issue.key === key);
+      if (selectedIssue) {
+        activeWeekday = selectedIssue.weekdayIndex;
+      }
+      activeCardIndex = -1;
+      render();
+    }
+
+    function setCard(index) {
+      activeCardIndex = index;
+      renderCards();
+      renderDetail();
+      detailPanel.classList.add("open");
+    }
+
+    function closeDetail() {
+      detailPanel.classList.remove("open");
+    }
+
+    function renderWeekdays() {
+      weekdayButtons.forEach((button) => {
+        const isActive = Number(button.dataset.weekday) === activeWeekday;
+        button.classList.toggle("active", isActive);
+      });
+    }
+
+    function renderCalendar() {
+      const filtered = currentIssues();
+      calendarOptions.innerHTML = filtered.length
+        ? filtered.map((issue) => `
+          <button class="calendar-option ${issue.key === pendingIssueKey ? "active" : ""}" type="button" data-key="${issue.key}">
+            ${escapeHtml(issue.dateLabel)} (${escapeHtml(issue.weekday)})
+          </button>
+        `).join("")
+        : '<p class="calendar-title">해당 요일 카드뉴스가 없습니다.</p>';
+
+      [...calendarOptions.querySelectorAll(".calendar-option")].forEach((button) => {
+        button.addEventListener("click", () => {
+          pendingIssueKey = button.dataset.key;
+          renderCalendar();
+        });
+      });
+    }
+
+    function renderCards() {
+      const issue = currentIssue();
+      if (!issue || !issue.cards.length) {
+        cardGrid.innerHTML = '<p class="empty">선택한 날짜에 표시할 카드뉴스가 없습니다.</p>';
+        selectedDate.textContent = "카드뉴스 없음";
+        selectedCount.textContent = "0개 카드뉴스";
+        return;
+      }
+
+      selectedDate.textContent = `${issue.dateLabel} (${issue.weekday})`;
+      selectedCount.textContent = `${issue.cards.length}개 카드뉴스`;
+      cardGrid.innerHTML = issue.cards.map((card, index) => `
+        <button class="thumb-card ${index === activeCardIndex ? "active" : ""}" type="button" data-index="${index}">
+          <div>
+            <p class="thumb-meta">${escapeHtml(card.tier || card.topic || "카드뉴스")}</p>
+            <h2>${escapeHtml(card.title)} ${index === 0 ? '<span class="new-badge">N</span>' : ''}</h2>
+            <p class="thumb-desc">${escapeHtml((card.summary && card.summary[0]) || card.why || "")}</p>
+          </div>
+          <div class="thumb-art" style="background:${escapeHtml(card.thumbColor)}">
+            ${card.thumbnailUrl ? `<img src="${escapeHtml(card.thumbnailUrl)}" alt="">` : index + 1}
+          </div>
+        </button>
+      `).join("");
+
+      [...cardGrid.querySelectorAll(".thumb-card")].forEach((button) => {
+        button.addEventListener("click", () => setCard(Number(button.dataset.index)));
+      });
+    }
+
+    function renderDetail() {
+      const issue = currentIssue();
+      const card = issue?.cards[activeCardIndex];
+      if (!issue || !card) {
+        detailPanel.innerHTML = "";
+        return;
+      }
+
+      const summaryItems = (card.summary || [])
+        .map((summary) => `<li>${escapeHtml(summary)}</li>`)
+        .join("");
+
+      detailPanel.innerHTML = `
+        <div class="detail-card" role="dialog" aria-modal="true" aria-label="카드뉴스 본문">
+          <button class="detail-close" type="button" aria-label="닫기">×</button>
+          <p class="detail-kicker">${escapeHtml(card.topic || card.tier || issue.title)}</p>
+          <h2>${escapeHtml(card.title)}</h2>
+          <section class="detail-section">
+            <h3>간단 설명</h3>
+            <ul>${summaryItems || `<li>${escapeHtml(card.why || "요약 정보가 없습니다.")}</li>`}</ul>
+          </section>
+          <section class="detail-section">
+            <h3>왜 중요한가</h3>
+            <p>${escapeHtml(card.why)}</p>
+          </section>
+          <section class="detail-section">
+            <h3>내게 적용할 점</h3>
+            <p>${escapeHtml(card.action)}</p>
+          </section>
+          <div class="detail-actions">
+            <a class="primary" href="${escapeHtml(issue.href)}">전체 카드뉴스 보기</a>
+            <a href="${escapeHtml(card.url)}" target="_blank" rel="noreferrer">원문 기사 보기</a>
+          </div>
+        </div>
+      `;
+      detailPanel.querySelector(".detail-close").addEventListener("click", closeDetail);
+    }
+
+    function render() {
+      renderWeekdays();
+      renderCalendar();
+      renderCards();
+      renderDetail();
+    }
+
+    weekdayButtons.forEach((button) => {
+      button.addEventListener("click", () => setWeekday(Number(button.dataset.weekday)));
+    });
+    calendarButton.addEventListener("click", () => {
+      pendingIssueKey = activeIssueKey;
+      renderCalendar();
+      calendarPopover.classList.toggle("open");
+    });
+    calendarConfirm.addEventListener("click", () => {
+      if (pendingIssueKey) {
+        setIssue(pendingIssueKey);
+      }
+      calendarPopover.classList.remove("open");
+    });
+    document.addEventListener("click", (event) => {
+      if (!calendarPopover.contains(event.target) && !calendarButton.contains(event.target)) {
+        calendarPopover.classList.remove("open");
+      }
+    });
+    detailPanel.addEventListener("click", (event) => {
+      if (event.target === detailPanel) {
+        closeDetail();
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeDetail();
+      }
+    });
+
+    render();
+  </script>
 </body>
 </html>

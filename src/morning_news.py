@@ -45,6 +45,7 @@ class NewsItem:
     source: str
     published: datetime | None
     summary: str
+    thumbnail_url: str
     topic: Topic
     score: float
     reasons: list[str]
@@ -114,6 +115,19 @@ def clean_text(value: str) -> str:
     value = html.unescape(value)
     value = re.sub(r"\s+", " ", value).strip()
     return value
+
+
+def extract_thumbnail_url(value: str) -> str:
+    patterns = [
+        r'<img[^>]+src=["\']([^"\']+)["\']',
+        r'<media:thumbnail[^>]+url=["\']([^"\']+)["\']',
+        r'<media:content[^>]+url=["\']([^"\']+)["\']',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, value, flags=re.IGNORECASE)
+        if match:
+            return html.unescape(match.group(1)).strip()
+    return ""
 
 
 def parse_source(item: ElementTree.Element, title: str) -> str:
@@ -199,7 +213,9 @@ def parse_rss_items(
     for item in root.findall("./channel/item"):
         title = clean_text(item.findtext("title", ""))
         url = clean_text(item.findtext("link", ""))
-        summary = clean_text(item.findtext("description", ""))
+        raw_summary = item.findtext("description", "")
+        summary = clean_text(raw_summary)
+        thumbnail_url = extract_thumbnail_url(raw_summary)
         if not title or not url:
             continue
         if any(term in f"{title} {summary}" for term in blocked_terms):
@@ -218,6 +234,7 @@ def parse_rss_items(
                 source=source,
                 published=published,
                 summary=summary,
+                thumbnail_url=thumbnail_url,
                 topic=topic,
                 score=score,
                 reasons=reasons,
@@ -315,6 +332,7 @@ def format_date(value: datetime | None) -> str:
 def render_card(item: NewsItem, index: int, core_count: int) -> str:
     tier = "핵심" if index <= core_count else "참고"
     escaped_url = html.escape(item.url, quote=True)
+    escaped_thumbnail_url = html.escape(item.thumbnail_url, quote=True)
     summary_items = "\n".join(
         f'<li style="margin:0 0 8px 0;color:#303642;">{html.escape(sentence)}</li>'
         for sentence in split_summary(item.summary)
@@ -322,7 +340,7 @@ def render_card(item: NewsItem, index: int, core_count: int) -> str:
     reasons = " · ".join(dict.fromkeys(item.reasons))
 
     return f"""
-        <article style="background:#ffffff;border:1px solid #d8dde6;border-radius:8px;padding:22px;margin:0 0 16px 0;">
+        <article data-thumbnail="{escaped_thumbnail_url}" style="background:#ffffff;border:1px solid #d8dde6;border-radius:8px;padding:22px;margin:0 0 16px 0;">
           <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;font-size:13px;font-weight:700;">
             <span style="color:#176b87;">{tier} {index}</span>
             <span style="color:#8a5a00;text-align:right;">{html.escape(item.topic.label)}</span>
