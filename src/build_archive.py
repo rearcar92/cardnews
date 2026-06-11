@@ -12,6 +12,7 @@ from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT_DIR / "output"
+TEMPLATE_PATH = ROOT_DIR / "templates" / "archive.html"
 INDEX_PATH = ROOT_DIR / "index.html"
 CARD_FILE_PATTERN = re.compile(r"morning-insight-cards-(\d{4}-\d{2}-\d{2})\.html$")
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
@@ -82,8 +83,7 @@ class CardNewsParser(HTMLParser):
         style = attrs_dict.get("style", "")
 
         if tag == "article":
-            self.current = CardItem()
-            self.current.thumbnail_url = attrs_dict.get("data-thumbnail", "") or ""
+            self.current = CardItem(thumbnail_url=attrs_dict.get("data-thumbnail", "") or "")
             self.in_article = True
             self.topline_spans = []
             self.footer_parts = []
@@ -116,21 +116,11 @@ class CardNewsParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "article" and self.current is not None:
             if self.current.title:
-                if self.topline_spans:
-                    self.current.tier = self.topline_spans[0]
-                if len(self.topline_spans) > 1:
-                    self.current.topic = self.topline_spans[-1]
-                if self.footer_parts:
-                    self.current.source_meta = self.footer_parts[0]
+                self.current.tier = self.topline_spans[0] if self.topline_spans else ""
+                self.current.topic = self.topline_spans[-1] if len(self.topline_spans) > 1 else ""
+                self.current.source_meta = self.footer_parts[0] if self.footer_parts else ""
                 self.cards.append(self.current)
-            self.current = None
-            self.in_article = False
-            self.in_topline = False
-            self.in_h2 = False
-            self.in_summary = False
-            self.in_footer = False
-            self.section_target = ""
-            self.capture_text_for = ""
+            self._reset_article()
             return
 
         if not self.in_article:
@@ -175,6 +165,16 @@ class CardNewsParser(HTMLParser):
             self.current.action = value
         elif self.capture_text_for == "footer":
             self.footer_parts.append(value)
+
+    def _reset_article(self) -> None:
+        self.current = None
+        self.in_article = False
+        self.in_topline = False
+        self.in_h2 = False
+        self.in_summary = False
+        self.in_footer = False
+        self.section_target = ""
+        self.capture_text_for = ""
 
 
 def parse_cards(path: Path) -> list[CardItem]:
@@ -234,8 +234,9 @@ def render_weekday_buttons(active_weekday: int) -> str:
     buttons = []
     for index, label in enumerate(WEEKDAYS):
         active = " active" if index == active_weekday else ""
+        escaped_label = html.escape(label)
         buttons.append(
-            f'<button class="weekday{active}" type="button" data-weekday="{index}">{html.escape(label)}</button>'
+            f'<button class="weekday{active}" type="button" data-weekday="{index}">{escaped_label}</button>'
         )
     return "\n".join(buttons)
 
@@ -243,630 +244,18 @@ def render_weekday_buttons(active_weekday: int) -> str:
 def render_index(issues: list[ArchiveIssue]) -> str:
     active_issue = issues[0] if issues else None
     active_weekday = active_issue.date.weekday() if active_issue else datetime.now().weekday()
-    data_json = json.dumps([issue_to_dict(issue) for issue in issues], ensure_ascii=False)
+    archive_data = (
+        json.dumps([issue_to_dict(issue) for issue in issues], ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace("</", "<\\/")
+    )
 
-    return f"""<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>요일별 카드뉴스</title>
-  <meta name="description" content="매일 발송한 카드뉴스 공개 아카이브">
-  <style>
-    :root {{
-      color-scheme: light;
-      --bg: #ffffff;
-      --ink: #202020;
-      --muted: #9a9a9a;
-      --line: #e9e9e9;
-      --accent: #12b9b5;
-      --panel: #ffffff;
-    }}
-    * {{
-      box-sizing: border-box;
-    }}
-    body {{
-      margin: 0;
-      background: var(--bg);
-      color: var(--ink);
-      font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
-      letter-spacing: 0;
-    }}
-    button,
-    select {{
-      font: inherit;
-    }}
-    button {{
-      border: 0;
-      background: transparent;
-      cursor: pointer;
-    }}
-    a {{
-      color: inherit;
-      text-decoration: none;
-    }}
-    .page {{
-      width: min(960px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 64px 0 72px;
-    }}
-    .masthead {{
-      text-align: center;
-      margin-bottom: 24px;
-    }}
-    .masthead h1 {{
-      margin: 0;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 500;
-    }}
-    .masthead p {{
-      margin: 14px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
-    }}
-    .weekdays {{
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      border-bottom: 1px solid var(--line);
-      margin-bottom: 14px;
-    }}
-    .weekday {{
-      position: relative;
-      height: 38px;
-      color: #969696;
-      font-size: 14px;
-    }}
-    .weekday.active {{
-      color: #202020;
-      font-weight: 500;
-    }}
-    .weekday.active::after {{
-      content: "";
-      position: absolute;
-      left: 35%;
-      right: 35%;
-      bottom: -1px;
-      height: 1px;
-      background: var(--accent);
-    }}
-    .issue-head {{
-      display: flex;
-      justify-content: flex-end;
-      gap: 18px;
-      align-items: center;
-      margin: 0 0 18px;
-      color: #9b9b9b;
-      font-size: 13px;
-      position: relative;
-    }}
-    .issue-head strong {{
-      position: relative;
-      color: #606060;
-      font-weight: 400;
-    }}
-    .issue-head strong::before {{
-      content: "";
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: var(--accent);
-      position: absolute;
-      left: -8px;
-      top: 7px;
-    }}
-    .calendar-wrap {{
-      position: relative;
-    }}
-    .calendar-button {{
-      width: 20px;
-      height: 20px;
-      border: 0;
-      color: #777777;
-      display: grid;
-      place-items: center;
-      background: #ffffff;
-      padding: 0;
-    }}
-    .calendar-button svg {{
-      width: 15px;
-      height: 15px;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      fill: none;
-    }}
-    .calendar-popover {{
-      position: absolute;
-      top: 38px;
-      right: 0;
-      z-index: 10;
-      width: 240px;
-      border: 1px solid var(--line);
-      background: #ffffff;
-      padding: 16px;
-      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.08);
-      display: none;
-    }}
-    .calendar-popover.open {{
-      display: block;
-    }}
-    .calendar-title {{
-      margin: 0 0 12px;
-      color: #606060;
-      font-size: 13px;
-    }}
-    .calendar-input {{
-      width: 100%;
-      height: 36px;
-      border: 1px solid var(--line);
-      color: #777777;
-      background: #ffffff;
-      padding: 0 10px;
-      font-size: 13px;
-    }}
-    .calendar-confirm {{
-      width: 100%;
-      min-height: 34px;
-      margin-top: 12px;
-      border: 1px solid var(--accent);
-      color: #202020;
-      background: #ffffff;
-      font-size: 13px;
-    }}
-    .content-layout {{
-      display: grid;
-      gap: 18px;
-      align-items: start;
-    }}
-    .thumbnail-grid {{
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }}
-    .thumb-card {{
-      min-height: 86px;
-      border: 1px solid var(--line);
-      background: #ffffff;
-      text-align: left;
-      padding: 12px 18px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 82px;
-      gap: 18px;
-      align-items: center;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    }}
-    .thumb-card.active,
-    .thumb-card:hover {{
-      border-color: var(--accent);
-      box-shadow: 0 8px 20px rgba(18, 185, 181, 0.08);
-    }}
-    .thumb-meta {{
-      margin: 0 0 7px;
-      color: #969696;
-      font-size: 13px;
-      line-height: 1.35;
-    }}
-    .thumb-card h2 {{
-      margin: 0;
-      color: #202020;
-      font-size: 15px;
-      line-height: 1.38;
-      font-weight: 400;
-    }}
-    .thumb-desc {{
-      margin: 6px 0 0;
-      color: #9a9a9a;
-      font-size: 13px;
-      line-height: 1.5;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }}
-    .thumb-art {{
-      width: 82px;
-      height: 58px;
-      display: grid;
-      place-items: center;
-      color: rgba(32, 32, 32, 0.54);
-      font-size: 22px;
-      font-weight: 300;
-      overflow: hidden;
-    }}
-    .thumb-art img {{
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }}
-    .new-badge {{
-      display: inline-grid;
-      place-items: center;
-      width: 15px;
-      height: 15px;
-      margin-left: 3px;
-      border-radius: 50%;
-      background: var(--accent);
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 700;
-      vertical-align: 1px;
-    }}
-    .detail-panel {{
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255, 255, 255, 0.82);
-      padding: 24px;
-    }}
-    .detail-panel.open {{
-      display: flex;
-    }}
-    .detail-card {{
-      width: min(620px, 100%);
-      max-height: min(720px, calc(100vh - 48px));
-      overflow: auto;
-      border: 1px solid var(--line);
-      background: #ffffff;
-      padding: 26px;
-      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.08);
-    }}
-    .detail-kicker {{
-      margin: 0 0 9px;
-      color: #969696;
-      font-size: 13px;
-    }}
-    .detail-panel h2 {{
-      margin: 0;
-      font-size: 18px;
-      line-height: 1.55;
-      font-weight: 400;
-    }}
-    .detail-close {{
-      float: right;
-      width: 28px;
-      height: 28px;
-      border: 1px solid var(--line);
-      color: #888888;
-      font-size: 18px;
-      line-height: 1;
-    }}
-    .detail-section {{
-      border-top: 1px solid var(--line);
-      margin-top: 18px;
-      padding-top: 15px;
-    }}
-    .detail-section h3 {{
-      margin: 0 0 7px;
-      color: #666666;
-      font-size: 13px;
-      font-weight: 500;
-    }}
-    .detail-section p,
-    .detail-section li {{
-      color: #555555;
-      font-size: 13px;
-      line-height: 1.65;
-    }}
-    .detail-section p {{
-      margin: 0;
-    }}
-    .detail-section ul {{
-      margin: 0;
-      padding-left: 18px;
-    }}
-    .detail-actions {{
-      display: grid;
-      gap: 8px;
-      margin-top: 18px;
-    }}
-    .detail-actions a {{
-      min-height: 38px;
-      border: 1px solid var(--line);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #555555;
-      font-size: 13px;
-    }}
-    .detail-actions a.primary {{
-      border-color: var(--accent);
-      color: #202020;
-    }}
-    .empty {{
-      grid-column: 1 / -1;
-      padding: 40px 20px;
-      border: 1px solid var(--line);
-      color: var(--muted);
-      text-align: center;
-      font-size: 14px;
-    }}
-    @media (max-width: 900px) {{}}
-    @media (max-width: 680px) {{
-      .page {{
-        width: min(100% - 24px, 520px);
-        padding-top: 70px;
-      }}
-      .issue-head {{
-        justify-content: flex-start;
-      }}
-      .calendar-popover {{
-        left: 0;
-        right: auto;
-      }}
-      .thumbnail-grid {{
-        grid-template-columns: 1fr;
-      }}
-      .thumb-card {{
-        grid-template-columns: minmax(0, 1fr) 64px;
-        gap: 14px;
-      }}
-      .thumb-art {{
-        width: 64px;
-        height: 64px;
-      }}
-    }}
-  </style>
-</head>
-<body>
-  <main class="page">
-    <header class="masthead">
-      <h1>요일별 카드뉴스</h1>
-      <p>날짜를 선택하고 오늘의 5개 카드뉴스를 확인해 보세요.</p>
-    </header>
-    <nav class="weekdays" aria-label="요일 선택">
-      {render_weekday_buttons(active_weekday)}
-    </nav>
-    <div class="issue-head">
-      <strong id="selectedDate">최신순</strong>
-      <div class="calendar-wrap">
-        <button class="calendar-button" id="calendarButton" type="button" aria-label="날짜 선택">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3.5" y="5" width="17" height="15.5" rx="2"></rect>
-            <path d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17"></path>
-          </svg>
-        </button>
-        <div class="calendar-popover" id="calendarPopover" aria-label="날짜 선택 달력">
-          <p class="calendar-title">날짜 선택</p>
-          <input class="calendar-input" id="calendarInput" type="date" aria-label="년월일 선택">
-          <button class="calendar-confirm" id="calendarConfirm" type="button">확인</button>
-        </div>
-      </div>
-      <span id="selectedCount">5개 카드뉴스</span>
-    </div>
-    <section class="content-layout" aria-label="카드뉴스">
-      <div class="thumbnail-grid" id="cardGrid"></div>
-    </section>
-    <aside class="detail-panel" id="detailPanel" aria-live="polite"></aside>
-  </main>
-  <script>
-    const issues = {data_json};
-    let activeWeekday = {active_weekday};
-    let activeIssueKey = issues[0]?.key || "";
-    let activeCardIndex = -1;
-    let pendingIssueKey = activeIssueKey;
-
-    const weekdayButtons = [...document.querySelectorAll(".weekday")];
-    const calendarButton = document.getElementById("calendarButton");
-    const calendarPopover = document.getElementById("calendarPopover");
-    const calendarInput = document.getElementById("calendarInput");
-    const calendarConfirm = document.getElementById("calendarConfirm");
-    const cardGrid = document.getElementById("cardGrid");
-    const detailPanel = document.getElementById("detailPanel");
-    const selectedDate = document.getElementById("selectedDate");
-    const selectedCount = document.getElementById("selectedCount");
-
-    function escapeHtml(value) {{
-      return String(value || "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }}
-
-    function currentIssues() {{
-      return issues.filter((issue) => issue.weekdayIndex === activeWeekday);
-    }}
-
-    function currentIssue() {{
-      return issues.find((issue) => issue.key === activeIssueKey) || null;
-    }}
-
-    function todayKey() {{
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const day = String(now.getDate()).padStart(2, "0");
-      return `${{year}}-${{month}}-${{day}}`;
-    }}
-
-    function weekdayIndexFromKey(key) {{
-      if (!key) {{
-        return activeWeekday;
-      }}
-      return new Date(`${{key}}T00:00:00`).getDay() === 0
-        ? 6
-        : new Date(`${{key}}T00:00:00`).getDay() - 1;
-    }}
-
-    function weekdayLabelFromKey(key) {{
-      return ["월", "화", "수", "목", "금", "토", "일"][weekdayIndexFromKey(key)] || "";
-    }}
-
-    function dateLabelFromKey(key) {{
-      if (!key) {{
-        return "날짜 없음";
-      }}
-      return key.replaceAll("-", ".");
-    }}
-
-    function setWeekday(index) {{
-      activeWeekday = index;
-      const filtered = currentIssues();
-      activeIssueKey = filtered[0]?.key || "";
-      pendingIssueKey = activeIssueKey;
-      activeCardIndex = -1;
-      render();
-    }}
-
-    function setIssue(key) {{
-      activeIssueKey = key;
-      pendingIssueKey = key;
-      const selectedIssue = issues.find((issue) => issue.key === key);
-      if (selectedIssue) {{
-        activeWeekday = selectedIssue.weekdayIndex;
-      }} else {{
-        activeWeekday = weekdayIndexFromKey(key);
-      }}
-      activeCardIndex = -1;
-      render();
-    }}
-
-    function setCard(index) {{
-      activeCardIndex = index;
-      renderCards();
-      renderDetail();
-      detailPanel.classList.add("open");
-    }}
-
-    function closeDetail() {{
-      detailPanel.classList.remove("open");
-    }}
-
-    function renderWeekdays() {{
-      weekdayButtons.forEach((button) => {{
-        const isActive = Number(button.dataset.weekday) === activeWeekday;
-        button.classList.toggle("active", isActive);
-      }});
-    }}
-
-    function renderCalendar() {{
-      calendarInput.max = todayKey();
-      calendarInput.value = pendingIssueKey || activeIssueKey || todayKey();
-    }}
-
-    function renderCards() {{
-      const issue = currentIssue();
-      if (!issue || !issue.cards.length) {{
-        cardGrid.innerHTML = '<p class="empty">해당 요일 카드뉴스가 없습니다.</p>';
-        selectedDate.textContent = activeIssueKey
-          ? `${{dateLabelFromKey(activeIssueKey)}} (${{weekdayLabelFromKey(activeIssueKey)}})`
-          : `${{["월", "화", "수", "목", "금", "토", "일"][activeWeekday]}}요일`;
-        selectedCount.textContent = "0개 카드뉴스";
-        return;
-      }}
-
-      selectedDate.textContent = `${{issue.dateLabel}} (${{issue.weekday}})`;
-      selectedCount.textContent = `${{issue.cards.length}}개 카드뉴스`;
-      cardGrid.innerHTML = issue.cards.map((card, index) => `
-        <button class="thumb-card ${{index === activeCardIndex ? "active" : ""}}" type="button" data-index="${{index}}">
-          <div>
-            <p class="thumb-meta">${{escapeHtml(card.tier || card.topic || "카드뉴스")}}</p>
-            <h2>${{escapeHtml(card.title)}} ${{index === 0 ? '<span class="new-badge">N</span>' : ''}}</h2>
-            <p class="thumb-desc">${{escapeHtml((card.summary && card.summary[0]) || card.why || "")}}</p>
-          </div>
-          <div class="thumb-art" style="background:${{escapeHtml(card.thumbColor)}}">
-            ${{card.thumbnailUrl ? `<img src="${{escapeHtml(card.thumbnailUrl)}}" alt="">` : index + 1}}
-          </div>
-        </button>
-      `).join("");
-
-      [...cardGrid.querySelectorAll(".thumb-card")].forEach((button) => {{
-        button.addEventListener("click", () => setCard(Number(button.dataset.index)));
-      }});
-    }}
-
-    function renderDetail() {{
-      const issue = currentIssue();
-      const card = issue?.cards[activeCardIndex];
-      if (!issue || !card) {{
-        detailPanel.innerHTML = "";
-        return;
-      }}
-
-      const summaryItems = (card.summary || [])
-        .map((summary) => `<li>${{escapeHtml(summary)}}</li>`)
-        .join("");
-
-      detailPanel.innerHTML = `
-        <div class="detail-card" role="dialog" aria-modal="true" aria-label="카드뉴스 본문">
-          <button class="detail-close" type="button" aria-label="닫기">×</button>
-          <p class="detail-kicker">${{escapeHtml(card.topic || card.tier || issue.title)}}</p>
-          <h2>${{escapeHtml(card.title)}}</h2>
-          <section class="detail-section">
-            <h3>간단 설명</h3>
-            <ul>${{summaryItems || `<li>${{escapeHtml(card.why || "요약 정보가 없습니다.")}}</li>`}}</ul>
-          </section>
-          <section class="detail-section">
-            <h3>왜 중요한가</h3>
-            <p>${{escapeHtml(card.why)}}</p>
-          </section>
-          <section class="detail-section">
-            <h3>내게 적용할 점</h3>
-            <p>${{escapeHtml(card.action)}}</p>
-          </section>
-          <div class="detail-actions">
-            <a class="primary" href="${{escapeHtml(issue.href)}}">전체 카드뉴스 보기</a>
-            <a href="${{escapeHtml(card.url)}}" target="_blank" rel="noreferrer">원문 기사 보기</a>
-          </div>
-        </div>
-      `;
-      detailPanel.querySelector(".detail-close").addEventListener("click", closeDetail);
-    }}
-
-    function render() {{
-      renderWeekdays();
-      renderCalendar();
-      renderCards();
-      renderDetail();
-    }}
-
-    weekdayButtons.forEach((button) => {{
-      button.addEventListener("click", () => setWeekday(Number(button.dataset.weekday)));
-    }});
-    calendarButton.addEventListener("click", () => {{
-      pendingIssueKey = activeIssueKey;
-      renderCalendar();
-      calendarPopover.classList.toggle("open");
-    }});
-    calendarInput.addEventListener("change", () => {{
-      pendingIssueKey = calendarInput.value;
-    }});
-    calendarConfirm.addEventListener("click", () => {{
-      if (pendingIssueKey) {{
-        if (pendingIssueKey > todayKey()) {{
-          pendingIssueKey = todayKey();
-        }}
-        setIssue(pendingIssueKey);
-      }}
-      calendarPopover.classList.remove("open");
-    }});
-    document.addEventListener("click", (event) => {{
-      if (!calendarPopover.contains(event.target) && !calendarButton.contains(event.target)) {{
-        calendarPopover.classList.remove("open");
-      }}
-    }});
-    detailPanel.addEventListener("click", (event) => {{
-      if (event.target === detailPanel) {{
-        closeDetail();
-      }}
-    }});
-    window.addEventListener("keydown", (event) => {{
-      if (event.key === "Escape") {{
-        closeDetail();
-      }}
-    }});
-
-    render();
-  </script>
-</body>
-</html>
-"""
+    return (
+        TEMPLATE_PATH.read_text(encoding="utf-8")
+        .replace("__WEEKDAY_BUTTONS__", render_weekday_buttons(active_weekday))
+        .replace("__ARCHIVE_DATA__", archive_data)
+        .replace("__ACTIVE_WEEKDAY__", str(active_weekday))
+    )
 
 
 def main() -> int:

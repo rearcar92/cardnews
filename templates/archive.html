@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>요일별 카드뉴스</title>
+  <meta name="description" content="매일 발송한 카드뉴스 공개 아카이브">
+  <link rel="stylesheet" href="static/archive.css">
+</head>
+<body>
+  <main class="page">
+    <nav class="weekdays" aria-label="요일 선택">
+      __WEEKDAY_BUTTONS__
+    </nav>
+    <div class="issue-head">
+      <strong id="selectedDate">최신순</strong>
+      <div class="calendar-wrap">
+        <button class="calendar-button" id="calendarButton" type="button" aria-label="날짜 선택">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="5" width="17" height="15.5" rx="2"></rect>
+            <path d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17"></path>
+          </svg>
+        </button>
+        <div class="calendar-popover" id="calendarPopover" aria-label="날짜 선택 달력">
+          <p class="calendar-title">날짜 선택</p>
+          <input class="calendar-input" id="calendarInput" type="date" aria-label="년월일 선택">
+          <button class="calendar-confirm" id="calendarConfirm" type="button">확인</button>
+        </div>
+      </div>
+      <span id="selectedCount">5개 카드뉴스</span>
+    </div>
+    <section class="content-layout" aria-label="카드뉴스">
+      <div class="thumbnail-grid" id="cardGrid"></div>
+    </section>
+    <aside class="detail-panel" id="detailPanel" aria-live="polite"></aside>
+  </main>
+  <script id="archive-data" type="application/json">__ARCHIVE_DATA__</script>
+  <script>
+    window.ARCHIVE_ACTIVE_WEEKDAY = __ACTIVE_WEEKDAY__;
+  </script>
+  <script src="static/archive.js"></script>
+</body>
+</html>

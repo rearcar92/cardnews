@@ -36,6 +36,8 @@ GitHub의 `Settings > Secrets and variables > Actions > Repository secrets`에 �
 - `SMTP_USER`: SMTP 로그인 계정
 - `SMTP_PASSWORD`: SMTP 비밀번호 또는 앱 비밀번호
 - `SMTP_USE_TLS`: 보통 `true`
+- `NAVER_CLIENT_ID`: 네이버 검색 API Client ID
+- `NAVER_CLIENT_SECRET`: 네이버 검색 API Client Secret
 
 스케줄은 GitHub Actions가 UTC 기준으로 동작하기 때문에 `7 23 * * 0-4`로 설정되어 있습니다.
 이는 한국 시간 기준 월요일부터 금요일 오전 8시 7분에 해당합니다.
@@ -94,4 +96,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\register_scheduled_task.ps1
 
 ## 참고
 
-이 MVP는 Google News RSS를 사용합니다. 회사 네트워크나 지역 설정에 따라 일부 결과가 비거나 지연될 수 있습니다. 실행 실패나 수집 결과는 `logs\morning-news.log`에 기록됩니다.
+이 MVP는 네이버 검색 API가 설정되어 있으면 네이버 뉴스/이미지 검색을 우선 사용하고, Google News RSS를 보조 소스로 사용합니다. 네이버 API 값이 없으면 기존처럼 Google News RSS만 사용합니다. 실행 실패나 수집 결과는 `logs\morning-news.log`에 기록됩니다.

@@ -46,6 +46,7 @@ class NewsItem:
     published: datetime | None
     summary: str
     thumbnail_url: str
+    source_urls: list[str]
     topic: Topic
     score: float
     reasons: list[str]
@@ -98,6 +99,31 @@ def google_news_rss_url(query: str, locale: dict[str, str]) -> str:
     )
 
 
+def naver_news_search_url(query: str) -> str:
+    encoded_query = urllib.parse.urlencode(
+        {
+            "query": query,
+            "display": "20",
+            "start": "1",
+            "sort": "date",
+        }
+    )
+    return f"https://openapi.naver.com/v1/search/news.json?{encoded_query}"
+
+
+def naver_image_search_url(query: str) -> str:
+    encoded_query = urllib.parse.urlencode(
+        {
+            "query": query,
+            "display": "5",
+            "start": "1",
+            "sort": "sim",
+            "filter": "medium",
+        }
+    )
+    return f"https://openapi.naver.com/v1/search/image?{encoded_query}"
+
+
 def fetch_url(url: str, timeout_seconds: int = 15) -> bytes:
     request = urllib.request.Request(
         url,
@@ -110,12 +136,26 @@ def fetch_url(url: str, timeout_seconds: int = 15) -> bytes:
         return response.read()
 
 
+def fetch_json_url(url: str, headers: dict[str, str], timeout_seconds: int = 15) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "MorningInsightCards/1.0 (+local personal briefing)",
+            "Accept": "application/json",
+            **headers,
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        charset = response.headers.get_content_charset() or "utf-8"
+        return json.loads(response.read().decode(charset, errors="ignore"))
+
+
 def fetch_html_url(url: str, timeout_seconds: int = 8) -> str:
     request = urllib.request.Request(
         url,
         headers={
             "User-Agent": "MorningInsightCards/1.0 (+local personal briefing)",
-            "Accept": "text/html,application/xhtml+xml",
+            "Accept": "text/html,application/xhtml+xml,image/avif,image/webp,*/*",
         },
     )
     with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
@@ -128,6 +168,17 @@ def clean_text(value: str) -> str:
     value = html.unescape(value)
     value = re.sub(r"\s+", " ", value).strip()
     return value
+
+
+def naver_headers() -> dict[str, str] | None:
+    client_id = os_environ_get("NAVER_CLIENT_ID")
+    client_secret = os_environ_get("NAVER_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+    return {
+        "X-Naver-Client-Id": client_id,
+        "X-Naver-Client-Secret": client_secret,
+    }
 
 
 def extract_thumbnail_url(value: str, item: ElementTree.Element | None = None) -> str:
@@ -156,30 +207,89 @@ def extract_thumbnail_url(value: str, item: ElementTree.Element | None = None) -
     return ""
 
 
-def extract_html_thumbnail_url(value: str) -> str:
+def extract_article_urls(value: str) -> list[str]:
+    urls: list[str] = []
+    for match in re.finditer(r'href=["\']([^"\']+)["\']', value, flags=re.IGNORECASE):
+        url = html.unescape(match.group(1)).strip()
+        domain = source_domain(url)
+        if not url.startswith(("http://", "https://")):
+            continue
+        if domain.endswith("google.com") or domain.endswith("google.co.kr"):
+            continue
+        if url not in urls:
+            urls.append(url)
+    return urls
+
+
+def is_generic_thumbnail_url(url: str) -> bool:
+    if not url:
+        return True
+    parsed = urllib.parse.urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    return hostname == "lh3.googleusercontent.com" and "J6_coFbogxhRI9iM864NL_liGXvsQp2AupsKei7z0cNNfDvGUmWUy20nuUhkREQyrpY4bEeIBuc" in url
+
+
+def extract_html_thumbnail_url(value: str, base_url: str = "") -> str:
     patterns = [
         r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
         r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
         r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
         r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
+        r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)["\']',
+        r'<link[^>]+href=["\']([^"\']+)["\'][^>]+rel=["\']image_src["\']',
     ]
     for pattern in patterns:
         match = re.search(pattern, value, flags=re.IGNORECASE)
         if match:
-            return html.unescape(match.group(1)).strip()
+            image_url = html.unescape(match.group(1)).strip()
+            if base_url:
+                image_url = urllib.parse.urljoin(base_url, image_url)
+            if not is_generic_thumbnail_url(image_url):
+                return image_url
+    return ""
+
+
+def thumbnail_query(title: str) -> str:
+    return re.sub(r"\s+-\s+[^-]+$", "", title).strip()
+
+
+def fetch_naver_image_thumbnail(title: str, headers: dict[str, str]) -> str:
+    data = fetch_json_url(naver_image_search_url(thumbnail_query(title)), headers, timeout_seconds=8)
+    for raw_item in data.get("items", []):
+        thumbnail_url = clean_text(str(raw_item.get("thumbnail", "")))
+        image_url = clean_text(str(raw_item.get("link", "")))
+        for candidate in [thumbnail_url, image_url]:
+            if candidate and not is_generic_thumbnail_url(candidate):
+                return candidate
     return ""
 
 
 def enrich_thumbnails(items: list[NewsItem]) -> None:
+    headers = naver_headers()
     for item in items:
-        if item.thumbnail_url:
+        if item.thumbnail_url and not is_generic_thumbnail_url(item.thumbnail_url):
             continue
-        try:
-            item.thumbnail_url = extract_html_thumbnail_url(fetch_html_url(item.url))
-            if item.thumbnail_url:
-                logging.info("Fetched thumbnail source=%s title=%s", item.source, item.title)
-        except Exception as exc:
-            logging.info("Thumbnail unavailable source=%s error=%s", item.source, exc)
+
+        for url in [*item.source_urls, item.url]:
+            try:
+                thumbnail_url = extract_html_thumbnail_url(fetch_html_url(url), url)
+                if thumbnail_url:
+                    item.thumbnail_url = thumbnail_url
+                    logging.info("Fetched thumbnail source=%s title=%s", item.source, item.title)
+                    break
+            except Exception as exc:
+                logging.info("Thumbnail unavailable source=%s url=%s error=%s", item.source, url, exc)
+
+        if not item.thumbnail_url and headers:
+            try:
+                item.thumbnail_url = fetch_naver_image_thumbnail(item.title, headers)
+                if item.thumbnail_url:
+                    logging.info("Fetched Naver image thumbnail source=%s title=%s", item.source, item.title)
+            except Exception as exc:
+                logging.info("Naver image thumbnail unavailable source=%s error=%s", item.source, exc)
+
+        if is_generic_thumbnail_url(item.thumbnail_url):
+            item.thumbnail_url = ""
 
 
 def parse_source(item: ElementTree.Element, title: str) -> str:
@@ -268,6 +378,7 @@ def parse_rss_items(
         raw_summary = item.findtext("description", "")
         summary = clean_text(raw_summary)
         thumbnail_url = extract_thumbnail_url(raw_summary, item)
+        source_urls = extract_article_urls(raw_summary)
         if not title or not url:
             continue
         if any(term in f"{title} {summary}" for term in blocked_terms):
@@ -287,8 +398,64 @@ def parse_rss_items(
                 published=published,
                 summary=summary,
                 thumbnail_url=thumbnail_url,
+                source_urls=source_urls,
                 topic=topic,
                 score=score,
+                reasons=reasons,
+            )
+        )
+
+    return items
+
+
+def parse_naver_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_naver_items(
+    data: dict[str, Any],
+    topic: Topic,
+    trusted_domains: list[str],
+    blocked_terms: list[str],
+    generated_at: datetime,
+) -> list[NewsItem]:
+    items: list[NewsItem] = []
+
+    for raw_item in data.get("items", []):
+        title = clean_text(str(raw_item.get("title", "")))
+        summary = clean_text(str(raw_item.get("description", "")))
+        original_url = clean_text(str(raw_item.get("originallink", "")))
+        naver_url = clean_text(str(raw_item.get("link", "")))
+        url = original_url or naver_url
+        if not title or not url:
+            continue
+        if any(term in f"{title} {summary}" for term in blocked_terms):
+            continue
+
+        published = parse_naver_datetime(str(raw_item.get("pubDate", "")))
+        if not is_fresh_article(published, generated_at):
+            continue
+
+        source = source_domain(original_url or naver_url) or "Naver News"
+        score, reasons = calculate_score(title, summary, topic, source, url, trusted_domains)
+        reasons.append("네이버 뉴스")
+        source_urls = [candidate for candidate in [original_url, naver_url] if candidate]
+        items.append(
+            NewsItem(
+                title=title,
+                url=url,
+                source=source,
+                published=published,
+                summary=summary,
+                thumbnail_url="",
+                source_urls=list(dict.fromkeys(source_urls)),
+                topic=topic,
+                score=score + 0.8,
                 reasons=reasons,
             )
         )
@@ -302,9 +469,26 @@ def collect_news(config: dict[str, Any], generated_at: datetime) -> list[NewsIte
     trusted_domains = list(config.get("trusted_domains", []))
     blocked_terms = list(config.get("blocked_terms", []))
     collected: list[NewsItem] = []
+    headers = naver_headers()
 
     for topic in topics:
         for query in topic.queries:
+            if headers:
+                try:
+                    data = fetch_json_url(naver_news_search_url(query), headers)
+                    collected.extend(
+                        parse_naver_items(
+                            data,
+                            topic,
+                            trusted_domains,
+                            blocked_terms,
+                            generated_at,
+                        )
+                    )
+                    logging.info("Fetched Naver query=%s topic=%s", query, topic.id)
+                except Exception as exc:
+                    logging.warning("Failed Naver query=%s topic=%s error=%s", query, topic.id, exc)
+
             url = google_news_rss_url(query, locale)
             try:
                 rss_bytes = fetch_url(url)
@@ -330,10 +514,72 @@ def normalize_title(title: str) -> str:
     return title
 
 
-def select_news(items: list[NewsItem], daily_count: int) -> list[NewsItem]:
+def normalize_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=False)
+    filtered_query = [
+        (key, value)
+        for key, value in query
+        if not key.lower().startswith("utm_") and key.lower() not in {"oc", "fbclid", "gclid"}
+    ]
+    return urllib.parse.urlunparse(
+        (
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            parsed.path.rstrip("/"),
+            "",
+            urllib.parse.urlencode(filtered_query),
+            "",
+        )
+    )
+
+
+def previous_output_paths(generated_at: datetime) -> list[Path]:
+    if not OUTPUT_DIR.exists():
+        return []
+
+    today_key = generated_at.strftime("%Y-%m-%d")
+    paths: list[Path] = []
+    for path in OUTPUT_DIR.glob("morning-insight-cards-*.html"):
+        match = re.search(r"morning-insight-cards-(\d{4}-\d{2}-\d{2})\.html$", path.name)
+        if match and match.group(1) < today_key:
+            paths.append(path)
+    return paths
+
+
+def load_previous_article_keys(generated_at: datetime) -> tuple[set[str], set[str]]:
+    titles: set[str] = set()
+    urls: set[str] = set()
+
+    for path in previous_output_paths(generated_at):
+        content = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"<h2[^>]*>\s*<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", content, re.DOTALL):
+            url = html.unescape(match.group(1)).strip()
+            title = clean_text(match.group(2))
+            if title:
+                titles.add(normalize_title(title))
+            if url:
+                urls.add(normalize_url(url))
+
+    return titles, urls
+
+
+def select_news(
+    items: list[NewsItem],
+    daily_count: int,
+    previous_titles: set[str] | None = None,
+    previous_urls: set[str] | None = None,
+) -> list[NewsItem]:
+    previous_titles = previous_titles or set()
+    previous_urls = previous_urls or set()
     deduped: dict[str, NewsItem] = {}
     for item in items:
         key = normalize_title(item.title)
+        url_key = normalize_url(item.url)
+        source_url_keys = {normalize_url(url) for url in item.source_urls}
+        if key in previous_titles or url_key in previous_urls or source_url_keys.intersection(previous_urls):
+            logging.info("Skipped previously published article title=%s source=%s", item.title, item.source)
+            continue
         if key not in deduped or item.score > deduped[key].score:
             deduped[key] = item
 
@@ -695,7 +941,8 @@ def main() -> int:
         config = load_config()
         items = collect_news(config, now)
         daily_count = int(config.get("daily_card_count", 5))
-        selected = select_news(items, daily_count)
+        previous_titles, previous_urls = load_previous_article_keys(now)
+        selected = select_news(items, daily_count, previous_titles, previous_urls)
         enrich_thumbnails(selected)
         html_content = render_html(selected, config, now)
         output_path = write_html(html_content, now)

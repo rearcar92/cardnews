@@ -36,11 +36,16 @@ jobs:
 
       - name: Generate briefing for push test
         if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[send-now]')
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: python src/morning_news.py --force --timezone Asia/Seoul
 
       - name: Generate and send briefing
         if: github.event_name != 'push' || contains(github.event.head_commit.message, '[send-now]')
         env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
